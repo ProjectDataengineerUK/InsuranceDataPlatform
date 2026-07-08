@@ -61,6 +61,17 @@ Plataforma de dados de seguros 100% Databricks: ingestão de dados públicos rea
 
 Terraform gerencia o que muda raramente: catálogos/schemas do Unity Catalog, secret scopes, grants. Databricks Asset Bundles gerencia o que muda com frequência: Jobs, Workflows, parâmetros. As tabelas Delta em si (Bronze/Silver/Gold) são criadas pelos próprios jobs Spark via `saveAsTable`/`MERGE` — nenhuma delas é gerenciada pelo Terraform, para evitar conflito de ownership entre os dois sistemas.
 
+## State do Terraform em CI (decisão pós-ship em 2026-07-08)
+
+O DESIGN original previa HCP Terraform (Terraform Cloud) como backend remoto. Por preferência explícita do usuário (evitar depender de mais um serviço externo), trocamos para backend `local` com o `terraform.tfstate` restaurado/salvo via `actions/cache` a cada execução do `deploy.yml`, e um bloco `concurrency` no workflow garantindo que nunca haja dois `terraform apply` rodando ao mesmo tempo.
+
+**Trade-offs aceitos conscientemente:**
+- Sem lock distribuído real (mitigado, não eliminado, pela serialização do workflow via `concurrency`)
+- O cache do GitHub Actions pode ser despejado (7 dias sem uso, ou limite de 10GB por repositório) — se isso acontecer, o próximo `terraform apply` não encontra o state anterior e tentaria recriar recursos já existentes (provavelmente falhando com "already exists" em vez de duplicar, já que os nomes são determinísticos, mas exigiria intervenção manual)
+- Rodar `terraform apply` localmente (fora do CI) não tem acesso automático ao state salvo no cache do GitHub Actions — precisaria baixar manualmente via API ou reconciliar
+
+**Quando reconsiderar:** se o projeto evoluir para múltiplos colaboradores rodando `terraform apply` com frequência, ou se um "already exists" real acontecer por cache perdido, vale migrar para um backend com lock de verdade (S3+DynamoDB, já que o Databricks trial atual está na AWS, ou HCP Terraform).
+
 ## Natureza real dos datasets públicos (validado pós-ship em 2026-07-08)
 
 - **SUSEP (AUTOSEG)**: confirmado via `DEFINICOES_AUTOSEG.pdf` (fonte oficial) que o dataset é **agregado** — cada linha é uma contagem/soma (`EXPOSICAO`, `PREMIO`, `FREQ_SIN1..9`, `INDENIZ1..9`) por grupamento de categoria tarifária/região/modelo/ano/sexo/faixa etária, não um sinistro individual. `susep_loader.py` gera sinistros sintéticos por linha, calibrados nas distribuições reais (frequência e indenização média por grupo) via amostragem log-normal — uma técnica estatística legítima, não dados inventados sem base real.

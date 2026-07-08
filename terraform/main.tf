@@ -8,15 +8,15 @@ terraform {
     }
   }
 
-  # Runners do GitHub Actions são efêmeros — um backend local perderia o state
-  # a cada execução. HCP Terraform (Terraform Cloud) mantém o state remoto e
-  # com lock, sem exigir infraestrutura própria de nenhum hyperscaler.
-  cloud {
-    organization = "insurance-lakehouse-platform"
-
-    workspaces {
-      tags = ["insurance-lakehouse-platform"]
-    }
+  # Backend local: o state (terraform.tfstate) é restaurado/salvo via
+  # actions/cache no GitHub Actions (ver .github/workflows/deploy.yml), sem
+  # depender de nenhum serviço externo (HCP Terraform, S3, etc.). Trade-off
+  # aceito conscientemente: sem lock distribuído real (mitigado serializando o
+  # workflow via `concurrency`) e sujeito à política de expiração do cache do
+  # GitHub Actions (7 dias sem uso, ou 10GB por repositório) — documentado em
+  # docs/ARCHITECTURE.md.
+  backend "local" {
+    path = "terraform.tfstate"
   }
 }
 

@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: terraform-deploy
+  cancel-in-progress: false
+
 jobs:
   deploy-dev:
     runs-on: ubuntu-latest
@@ -14,11 +18,17 @@ jobs:
 
       - uses: hashicorp/setup-terraform@v3
 
+      - name: Restore Terraform state (dev)
+        uses: actions/cache/restore@v4
+        with:
+          path: terraform/terraform.tfstate
+          key: tfstate-dev-${{ github.run_id }}
+          restore-keys: |
+            tfstate-dev-
+
       - name: Terraform apply (dev)
         working-directory: terraform
         env:
-          TF_TOKEN_app_terraform_io: ${{ secrets.TF_CLOUD_TOKEN }}
-          TF_WORKSPACE: insurance-dev
           TF_VAR_databricks_host: ${{ secrets.DATABRICKS_HOST_DEV }}
           TF_VAR_databricks_token: ${{ secrets.DATABRICKS_TOKEN_DEV }}
           TF_VAR_environment: dev
@@ -28,6 +38,13 @@ jobs:
         run: |
           terraform init
           terraform apply -auto-approve
+
+      - name: Save Terraform state (dev)
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: terraform/terraform.tfstate
+          key: tfstate-dev-${{ github.run_id }}
 
       - uses: databricks/setup-cli@main
 
@@ -47,11 +64,17 @@ jobs:
 
       - uses: hashicorp/setup-terraform@v3
 
+      - name: Restore Terraform state (prod)
+        uses: actions/cache/restore@v4
+        with:
+          path: terraform/terraform.tfstate
+          key: tfstate-prod-${{ github.run_id }}
+          restore-keys: |
+            tfstate-prod-
+
       - name: Terraform apply (prod)
         working-directory: terraform
         env:
-          TF_TOKEN_app_terraform_io: ${{ secrets.TF_CLOUD_TOKEN }}
-          TF_WORKSPACE: insurance-prod
           TF_VAR_databricks_host: ${{ secrets.DATABRICKS_HOST_PROD }}
           TF_VAR_databricks_token: ${{ secrets.DATABRICKS_TOKEN_PROD }}
           TF_VAR_environment: prod
@@ -61,6 +84,13 @@ jobs:
         run: |
           terraform init
           terraform apply -auto-approve
+
+      - name: Save Terraform state (prod)
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: terraform/terraform.tfstate
+          key: tfstate-prod-${{ github.run_id }}
 
       - uses: databricks/setup-cli@main
 

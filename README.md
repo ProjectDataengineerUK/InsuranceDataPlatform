@@ -82,6 +82,8 @@ databricks bundle deploy -t dev
 
 O CI/CD (`.github/workflows/deploy.yml`) automatiza os dois passos acima para `dev` a cada push em `main`, seguido de deploy em `prod` (gated por aprovação manual via GitHub Environments).
 
+**Sobre o state do Terraform no CI:** usamos backend `local`, com o arquivo `terraform.tfstate` restaurado/salvo via `actions/cache` entre execuções do workflow (sem depender de um serviço externo como HCP Terraform). O workflow usa `concurrency` para nunca rodar dois deploys em paralelo, mas não há lock distribuído de verdade — ver limitações em [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
 ### Governança pós-deploy
 
 Depois do primeiro deploy do job Gold (que cria a tabela `claims`), aplique o masking de `customer_id`:
