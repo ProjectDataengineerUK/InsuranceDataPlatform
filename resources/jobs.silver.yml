@@ -1,0 +1,48 @@
+resources:
+  jobs:
+    silver_transform:
+      name: insurance-silver-transform-${bundle.target}
+      continuous:
+        pause_status: UNPAUSED
+      max_concurrent_runs: 1
+
+      job_clusters:
+        - job_cluster_key: streaming_cluster
+          new_cluster:
+            spark_version: 15.4.x-scala2.12
+            node_type_id: Standard_DS3_v2
+            num_workers: 1
+            data_security_mode: SINGLE_USER
+
+      tasks:
+        - task_key: silver_claims
+          job_cluster_key: streaming_cluster
+          spark_python_task:
+            python_file: ../src/streaming/silver_transform.py
+            parameters:
+              - "--bronze-table"
+              - "${var.catalog}.bronze.claims"
+              - "--silver-table"
+              - "${var.catalog}.silver.claims"
+              - "--checkpoint-path"
+              - "/Volumes/${var.catalog}/silver/_checkpoints/claims"
+              - "--key-column"
+              - "claim_id"
+              - "--results-table"
+              - "${var.catalog}.monitoring._dq_results"
+
+        - task_key: silver_policies
+          job_cluster_key: streaming_cluster
+          spark_python_task:
+            python_file: ../src/streaming/silver_transform.py
+            parameters:
+              - "--bronze-table"
+              - "${var.catalog}.bronze.policies"
+              - "--silver-table"
+              - "${var.catalog}.silver.policies"
+              - "--checkpoint-path"
+              - "/Volumes/${var.catalog}/silver/_checkpoints/policies"
+              - "--key-column"
+              - "policy_id"
+              - "--results-table"
+              - "${var.catalog}.monitoring._dq_results"

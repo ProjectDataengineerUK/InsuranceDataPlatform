@@ -1,0 +1,8 @@
+environment      = "dev"
+databricks_host  = "https://<workspace>.cloud.databricks.com"
+catalog_owner    = "account users"
+
+# Não commitar valores reais — use `terraform apply -var-file=environments/dev.tfvars`
+# com um arquivo local `dev.tfvars` (ignorado pelo .gitignore) ou variáveis TF_VAR_*.
+# databricks_token, confluent_bootstrap_servers, confluent_api_key e
+# confluent_api_secret devem vir de TF_VAR_* / secrets do CI, nunca deste arquivo.

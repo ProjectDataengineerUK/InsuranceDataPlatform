@@ -1,0 +1,43 @@
+resources:
+  jobs:
+    gold_aggregate:
+      name: insurance-gold-aggregate-${bundle.target}
+      schedule:
+        quartz_cron_expression: "0 */10 * * * ?"
+        timezone_id: "America/Sao_Paulo"
+        pause_status: UNPAUSED
+
+      job_clusters:
+        - job_cluster_key: batch_cluster
+          new_cluster:
+            spark_version: 15.4.x-scala2.12
+            node_type_id: Standard_DS3_v2
+            num_workers: 1
+            data_security_mode: SINGLE_USER
+
+      tasks:
+        - task_key: gold_claims_agg
+          job_cluster_key: batch_cluster
+          spark_python_task:
+            python_file: ../src/streaming/gold_aggregate.py
+            parameters:
+              - "--silver-table"
+              - "${var.catalog}.silver.claims"
+              - "--gold-claims-table"
+              - "${var.catalog}.gold.claims"
+              - "--gold-agg-table"
+              - "${var.catalog}.gold.claims_region_agg"
+              - "--run-date"
+              - "{{job.start_time.iso_date}}"
+
+        - task_key: sla_monitor
+          job_cluster_key: batch_cluster
+          depends_on:
+            - task_key: gold_claims_agg
+          spark_python_task:
+            python_file: ../src/monitoring/sla_alerts.py
+            parameters:
+              - "--gold-claims-table"
+              - "${var.catalog}.gold.claims"
+              - "--sla-hours"
+              - "24"

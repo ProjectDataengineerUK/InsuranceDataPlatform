@@ -1,0 +1,42 @@
+bundle:
+  name: insurance-lakehouse-platform
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Nome do catálogo Unity Catalog do ambiente
+
+# Os arquivos em src/ são sincronizados como Workspace Files pelo próprio DAB
+# (sync automático da raiz do bundle) — não há empacotamento em wheel neste
+# estágio; os jobs referenciam os .py diretamente via spark_python_task.
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: ${DATABRICKS_HOST}
+    variables:
+      catalog: insurance_dev
+    run_as:
+      service_principal_name: ${DATABRICKS_SP_DEV}
+
+  staging:
+    mode: production
+    workspace:
+      host: ${DATABRICKS_HOST}
+    variables:
+      catalog: insurance_staging
+    run_as:
+      service_principal_name: ${DATABRICKS_SP_STAGING}
+
+  prod:
+    mode: production
+    workspace:
+      host: ${DATABRICKS_HOST}
+    variables:
+      catalog: insurance_prod
+    run_as:
+      service_principal_name: ${DATABRICKS_SP_PROD}

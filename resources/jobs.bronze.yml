@@ -1,0 +1,52 @@
+resources:
+  jobs:
+    bronze_ingest:
+      name: insurance-bronze-ingest-${bundle.target}
+      continuous:
+        pause_status: UNPAUSED
+      max_concurrent_runs: 1
+
+      job_clusters:
+        - job_cluster_key: streaming_cluster
+          new_cluster:
+            spark_version: 15.4.x-scala2.12
+            node_type_id: Standard_DS3_v2
+            num_workers: 1
+            data_security_mode: SINGLE_USER
+
+      tasks:
+        - task_key: bronze_claims
+          job_cluster_key: streaming_cluster
+          spark_python_task:
+            python_file: ../src/streaming/bronze_ingest.py
+            parameters:
+              - "--topic"
+              - "claim-opened"
+              - "--bronze-table"
+              - "${var.catalog}.bronze.claims"
+              - "--checkpoint-path"
+              - "/Volumes/${var.catalog}/bronze/_checkpoints/claim-opened"
+
+        - task_key: bronze_policies
+          job_cluster_key: streaming_cluster
+          spark_python_task:
+            python_file: ../src/streaming/bronze_ingest.py
+            parameters:
+              - "--topic"
+              - "policy-created"
+              - "--bronze-table"
+              - "${var.catalog}.bronze.policies"
+              - "--checkpoint-path"
+              - "/Volumes/${var.catalog}/bronze/_checkpoints/policy-created"
+
+        - task_key: bronze_customers
+          job_cluster_key: streaming_cluster
+          spark_python_task:
+            python_file: ../src/streaming/bronze_ingest.py
+            parameters:
+              - "--topic"
+              - "customer-updated"
+              - "--bronze-table"
+              - "${var.catalog}.bronze.customers"
+              - "--checkpoint-path"
+              - "/Volumes/${var.catalog}/bronze/_checkpoints/customer-updated"
