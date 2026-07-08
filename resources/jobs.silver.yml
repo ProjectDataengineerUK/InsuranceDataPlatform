@@ -6,9 +6,10 @@ resources:
         pause_status: UNPAUSED
       max_concurrent_runs: 1
 
-      # Workspace trial só permite compute serverless.
+      # Workspace trial só permite compute serverless — environment_key obrigatório.
       tasks:
         - task_key: silver_claims
+          environment_key: default
           spark_python_task:
             python_file: ../src/streaming/silver_transform.py
             parameters:
@@ -24,6 +25,7 @@ resources:
               - "${var.catalog}.monitoring._dq_results"
 
         - task_key: silver_policies
+          environment_key: default
           spark_python_task:
             python_file: ../src/streaming/silver_transform.py
             parameters:
@@ -37,3 +39,8 @@ resources:
               - "policy_id"
               - "--results-table"
               - "${var.catalog}.monitoring._dq_results"
+
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "2"

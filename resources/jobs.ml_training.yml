@@ -7,9 +7,10 @@ resources:
         timezone_id: "America/Sao_Paulo"
         pause_status: UNPAUSED
 
-      # Workspace trial só permite compute serverless.
+      # Workspace trial só permite compute serverless — environment_key obrigatório.
       tasks:
         - task_key: train_fraud_model
+          environment_key: default
           spark_python_task:
             python_file: ../src/fraud/train_model.py
             parameters:
@@ -17,3 +18,10 @@ resources:
               - "${var.catalog}.gold.claims"
               - "--experiment-name"
               - "insurance-fraud-detection-${bundle.target}"
+
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "2"
+            dependencies:
+              - scikit-learn
