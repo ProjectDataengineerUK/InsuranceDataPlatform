@@ -12,31 +12,25 @@ variables:
 # (sync automático da raiz do bundle) — não há empacotamento em wheel neste
 # estágio; os jobs referenciam os .py diretamente via spark_python_task.
 
+# workspace.host não é declarado: o Databricks CLI lê DATABRICKS_HOST/
+# DATABRICKS_TOKEN diretamente do ambiente (já setados pelo deploy.yml),
+# não há sintaxe ${VAR} de shell suportada aqui — "${DATABRICKS_HOST}"
+# literal quebrava o deploy (confirmado no terceiro deploy real).
+# run_as via service principal fica para quando migrarmos de PAT pessoal
+# para service principals dedicados por ambiente (ver docs/ARCHITECTURE.md).
 targets:
   dev:
     mode: development
     default: true
-    workspace:
-      host: ${DATABRICKS_HOST}
     variables:
       catalog: insurance_dev
-    run_as:
-      service_principal_name: ${DATABRICKS_SP_DEV}
 
   staging:
     mode: production
-    workspace:
-      host: ${DATABRICKS_HOST}
     variables:
       catalog: insurance_staging
-    run_as:
-      service_principal_name: ${DATABRICKS_SP_STAGING}
 
   prod:
     mode: production
-    workspace:
-      host: ${DATABRICKS_HOST}
     variables:
       catalog: insurance_prod
-    run_as:
-      service_principal_name: ${DATABRICKS_SP_PROD}

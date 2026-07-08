@@ -76,6 +76,10 @@ O DESIGN original previa HCP Terraform (Terraform Cloud) como backend remoto. Po
 
 **Quando reconsiderar:** se o projeto evoluir para múltiplos colaboradores rodando `terraform apply` com frequência, ou se um "already exists" real acontecer por cache perdido, vale migrar para um backend com lock de verdade (S3+DynamoDB, já que o Databricks trial atual está na AWS, ou HCP Terraform).
 
+## Autenticação do Databricks CLI/DAB (2026-07-08)
+
+`databricks.yml` não declara `workspace.host` nem `run_as.service_principal_name` — o Databricks CLI lê `DATABRICKS_HOST`/`DATABRICKS_TOKEN` diretamente do ambiente (já configurados como env vars no `deploy.yml`). A tentativa inicial de usar `${DATABRICKS_HOST}` no YAML quebrou o deploy real (`invalid character "{" in host name`) — essa sintaxe de shell não é suportada pelo DAB. Hoje os jobs rodam com o dono do PAT pessoal (`DATABRICKS_TOKEN_DEV`); migrar para service principals dedicados por ambiente (`run_as`) é um item de roadmap quando o projeto sair do trial.
+
 ## Natureza real dos datasets públicos (validado pós-ship em 2026-07-08)
 
 - **SUSEP (AUTOSEG)**: confirmado via `DEFINICOES_AUTOSEG.pdf` (fonte oficial) que o dataset é **agregado** — cada linha é uma contagem/soma (`EXPOSICAO`, `PREMIO`, `FREQ_SIN1..9`, `INDENIZ1..9`) por grupamento de categoria tarifária/região/modelo/ano/sexo/faixa etária, não um sinistro individual. `susep_loader.py` gera sinistros sintéticos por linha, calibrados nas distribuições reais (frequência e indenização média por grupo) via amostragem log-normal — uma técnica estatística legítima, não dados inventados sem base real.
