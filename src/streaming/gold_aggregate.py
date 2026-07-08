@@ -1,4 +1,5 @@
 import argparse
+import logging
 
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.functions import avg, col, count, lit, when
@@ -25,6 +26,8 @@ ALTER TABLE {catalog}.gold.claims
   ALTER COLUMN customer_id
   SET MASK {catalog}.gold.mask_customer_id
 """
+
+logger = logging.getLogger(__name__)
 
 
 def build_region_aggregates(claims_gold_df: DataFrame) -> DataFrame:
@@ -71,6 +74,15 @@ def run_gold_job(
     run_date: str,
 ) -> None:
     spark = get_spark("gold-aggregate")
+
+    if not spark.catalog.tableExists(gold_claims_table):
+        # Primeira execução possível antes de fraud_score_stream escrever seu
+        # primeiro micro-batch em gold.claims. Não é um erro: a próxima
+        # execução agendada (10 em 10 min) encontra a tabela já criada.
+        logger.warning(
+            "%s ainda não existe — pulando esta execução do gold_aggregate", gold_claims_table
+        )
+        return
 
     claims_gold_df = spark.read.table(gold_claims_table).filter(col("event_date") == lit(run_date))
     region_agg_df = build_region_aggregates(claims_gold_df)
