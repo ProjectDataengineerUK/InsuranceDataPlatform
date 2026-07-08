@@ -61,6 +61,10 @@ Plataforma de dados de seguros 100% Databricks: ingestão de dados públicos rea
 
 Terraform gerencia o que muda raramente: catálogos/schemas do Unity Catalog, secret scopes, grants. Databricks Asset Bundles gerencia o que muda com frequência: Jobs, Workflows, parâmetros. As tabelas Delta em si (Bronze/Silver/Gold) são criadas pelos próprios jobs Spark via `saveAsTable`/`MERGE` — nenhuma delas é gerenciada pelo Terraform, para evitar conflito de ownership entre os dois sistemas.
 
+## Criação do catálogo Unity Catalog em contas trial com "Default Storage" (2026-07-08)
+
+Em workspaces trial da Databricks com o recurso de conta "Default Storage" habilitado, `terraform apply` falha ao criar `databricks_catalog` do zero com `Error: cannot create catalog: Metastore storage root URL does not exist` — o Terraform não herda automaticamente o Default Storage do metastore, mesmo ele existindo e funcionando pela UI. Workaround adotado: o catálogo é criado uma vez manualmente pela UI do Databricks (que usa o Default Storage sem fricção) e o `deploy.yml` roda `terraform import databricks_catalog.insurance "insurance_${TF_VAR_environment}" || true` antes de cada `apply` — idempotente, só faz efeito na primeira vez que o catálogo existe fora do state. Para contas de produção com storage próprio (S3 + IAM), a alternativa correta é declarar `storage_root` explícito com uma External Location/Storage Credential gerenciados via Terraform.
+
 ## State do Terraform em CI (decisão pós-ship em 2026-07-08)
 
 O DESIGN original previa HCP Terraform (Terraform Cloud) como backend remoto. Por preferência explícita do usuário (evitar depender de mais um serviço externo), trocamos para backend `local` com o `terraform.tfstate` restaurado/salvo via `actions/cache` a cada execução do `deploy.yml`, e um bloco `concurrency` no workflow garantindo que nunca haja dois `terraform apply` rodando ao mesmo tempo.

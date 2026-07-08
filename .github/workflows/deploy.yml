@@ -38,6 +38,7 @@ jobs:
           TF_VAR_confluent_api_secret: ${{ secrets.CONFLUENT_API_SECRET }}
         run: |
           terraform init
+          terraform import databricks_catalog.insurance "insurance_${TF_VAR_environment}" || true
           terraform apply -auto-approve
 
       - name: Save Terraform state (dev)
@@ -84,6 +85,7 @@ jobs:
           TF_VAR_confluent_api_secret: ${{ secrets.CONFLUENT_API_SECRET }}
         run: |
           terraform init
+          terraform import databricks_catalog.insurance "insurance_${TF_VAR_environment}" || true
           terraform apply -auto-approve
 
       - name: Save Terraform state (prod)
