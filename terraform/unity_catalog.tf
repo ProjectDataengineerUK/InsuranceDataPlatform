@@ -3,6 +3,14 @@ resource "databricks_catalog" "insurance" {
   comment = "Catálogo do Insurance Lakehouse Platform — ambiente ${var.environment}"
 
   owner = var.catalog_owner
+
+  # storage_root é ForceNew e não é declarado aqui (o catálogo é criado via UI
+  # usando o Default Storage do metastore, depois adotado via `terraform
+  # import`) — sem isso, o plano tenta destruir e recriar o catálogo a cada
+  # apply só porque o campo está ausente do config.
+  lifecycle {
+    ignore_changes = [storage_root]
+  }
 }
 
 resource "databricks_schema" "bronze" {
