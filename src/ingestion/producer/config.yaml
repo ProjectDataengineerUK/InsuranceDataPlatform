@@ -11,22 +11,22 @@ topics:
 sources:
   susep:
     enabled: true
-    # Dataset AGREGADO (sistema AUTOSEG) — dados sintéticos calibrados nele, ver
-    # src/ingestion/producer/datasets/susep_loader.py. Resolver o CSV mais recente
-    # em: https://www.gov.br/susep/pt-br/central-de-conteudos/dados-estatisticos/bases-anonimizadas
-    dataset_url: ""
+    # Microdados reais de sinistros (não agregados) — layout confirmado em
+    # Dados_AUTO.pdf. Arquivo semestral (~2.45M linhas); sample_rows evita
+    # tentar processar tudo de uma vez numa demo.
+    dataset_url: "https://dadosabertos.susep.gov.br/dadosabertos/auto_apos_2006/S_AUTO_2020B.zip"
     dataset_path: "data/susep_sinistros.csv"
     event_topic: "claim_opened"
-    reference_period_start: "2024-01-01T00:00:00"
-    reference_period_end: "2024-06-30T23:59:59"
+    sample_rows: 2000
   ans:
     enabled: true
-    # Dataset real por linha (movimentação de beneficiários) — confirmado via
-    # dicionario_de_dados_sib.ods. FTP público: https://dadosabertos.ans.gov.br/FTP/PDA/dados_de_beneficiarios_por_operadora/
-    # (resolver o arquivo do ano/mês mais recente dentro dessa pasta)
-    dataset_url: ""
+    # Dados reais de movimentação de beneficiários, um estado por vez (arquivo
+    # nacional inteiro seria muito grande para uma demo). Troque AC por outra
+    # UF em: https://dadosabertos.ans.gov.br/FTP/PDA/dados_de_beneficiarios_por_operadora/
+    dataset_url: "https://dadosabertos.ans.gov.br/FTP/PDA/dados_de_beneficiarios_por_operadora/sib_ativo_AC.zip"
     dataset_path: "data/ans_dados.csv"
     event_topic: "policy_created"
+    sample_rows: 2000
   open_insurance:
     enabled: false  # fast-follow — depende de credenciamento no sandbox Open Insurance Brasil
     dataset_path: "data/open_insurance.json"

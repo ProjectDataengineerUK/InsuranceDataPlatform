@@ -1,68 +1,56 @@
-from datetime import datetime
-
 import pandas as pd
 
-from src.ingestion.producer.datasets.susep_loader import generate_synthetic_claims
+from src.ingestion.producer.datasets.susep_loader import normalize_susep_claims
 
 
-def test_generates_one_row_per_claim_in_frequency():
-    aggregates_df = pd.DataFrame(
-        [
-            {
-                "REGIAO": "SP",
-                "FREQ_SIN1": 3,
-                "INDENIZ1": 3000.0,
-                "FREQ_SIN2": 0,
-                "INDENIZ2": 0.0,
-            }
-        ]
-    )
-
-    result = generate_synthetic_claims(
-        aggregates_df,
-        reference_period_start=datetime(2024, 1, 1),
-        reference_period_end=datetime(2024, 6, 30),
-    )
-
-    assert len(result) == 3
-    assert (result["region"] == "SP").all()
-    assert (result["vehicle_type"] == "roubo_furto").all()
-    assert (result["amount"] > 0).all()
+def _row(**overrides):
+    base = {
+        "COD_APO": "287756959",
+        "D_OCORR": "20200504",
+        "INDENIZ": "520.0",
+        "REGIAO": "21",
+        "CAUSA": "9",
+    }
+    base.update(overrides)
+    return base
 
 
-def test_skips_zero_frequency_coverages():
-    aggregates_df = pd.DataFrame(
-        [{"REGIAO": "RJ", "FREQ_SIN1": 0, "INDENIZ1": 0.0, "FREQ_SIN4": 2, "INDENIZ4": 8000.0}]
-    )
+def test_normalizes_real_susep_row_shape():
+    df = pd.DataFrame([_row()])
 
-    result = generate_synthetic_claims(
-        aggregates_df,
-        reference_period_start=datetime(2024, 1, 1),
-        reference_period_end=datetime(2024, 6, 30),
-    )
+    result = normalize_susep_claims(df)
 
-    assert len(result) == 2
-    assert (result["vehicle_type"] == "incendio").all()
-
-
-def test_timestamps_fall_within_reference_period():
-    aggregates_df = pd.DataFrame([{"REGIAO": "MG", "FREQ_SIN9": 5, "INDENIZ9": 500.0}])
-    start = datetime(2024, 1, 1)
-    end = datetime(2024, 1, 31)
-
-    result = generate_synthetic_claims(aggregates_df, start, end)
-
-    assert (result["event_timestamp"] >= start).all()
-    assert (result["event_timestamp"] <= end).all()
+    assert len(result) == 1
+    row = result.iloc[0]
+    assert row["policy_id"] == "287756959"
+    assert row["amount"] == 520.0
+    assert row["region"] == "21"
+    assert row["event_timestamp"] == pd.Timestamp("2020-05-04")
+    assert row["vehicle_type"] == "outros"
+    assert row["source"] == "susep"
+    assert row["claim_id"]
 
 
-def test_unknown_region_falls_back_when_column_missing():
-    aggregates_df = pd.DataFrame([{"FREQ_SIN1": 1, "INDENIZ1": 100.0}])
+def test_decodes_known_cause_codes():
+    df = pd.DataFrame([_row(CAUSA="6"), _row(CAUSA="4")])
 
-    result = generate_synthetic_claims(
-        aggregates_df,
-        reference_period_start=datetime(2024, 1, 1),
-        reference_period_end=datetime(2024, 1, 2),
-    )
+    result = normalize_susep_claims(df)
 
-    assert result.iloc[0]["region"] == "UNKNOWN"
+    assert result.iloc[0]["vehicle_type"] == "incendio"
+    assert result.iloc[1]["vehicle_type"] == "colisao_parcial"
+
+
+def test_malformed_date_becomes_nat():
+    df = pd.DataFrame([_row(D_OCORR="00000000")])
+
+    result = normalize_susep_claims(df)
+
+    assert pd.isna(result.iloc[0]["event_timestamp"])
+
+
+def test_each_row_gets_a_unique_claim_id():
+    df = pd.DataFrame([_row(), _row()])
+
+    result = normalize_susep_claims(df)
+
+    assert result.iloc[0]["claim_id"] != result.iloc[1]["claim_id"]

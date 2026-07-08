@@ -1,102 +1,69 @@
 import uuid
-from datetime import datetime, timedelta
 
-import numpy as np
 import pandas as pd
 
-from src.ingestion.producer.datasets.base_loader import read_csv_safely
+from src.ingestion.producer.datasets.base_loader import apply_column_mapping, read_csv_safely
 
-SUSEP_OPEN_DATA_PORTAL = "https://www.gov.br/susep/pt-br/acesso-a-informacao/dados-abertos"
+SUSEP_OPEN_DATA_PORTAL = "https://www.gov.br/susep/pt-br/central-de-conteudos/dados-estatisticos/bases-anonimizadas"
 
-# O dataset público da SUSEP (sistema AUTOSEG) é AGREGADO, não um registro por
-# sinistro: cada linha representa contagens/somas (EXPOSICAO, PREMIO, FREQ_SIN1..9,
-# INDENIZ1..9) para um grupamento de categoria tarifária/região/modelo/ano/sexo/
-# faixa etária — confirmado no PDF oficial "DEFINICOES_AUTOSEG.pdf" da SUSEP.
-# Por isso geramos sinistros sintéticos por linha, calibrados nessas distribuições
-# reais (frequência e indenização média por grupo), em vez de fazer replay direto.
-# Resolva a URL do CSV mais recente em: SUSEP_OPEN_DATA_PORTAL /
-# src/ingestion/producer/config.yaml (sources.susep.dataset_url).
-
-COVERAGE_LABELS = {
-    "1": "roubo_furto",
-    "2": "colisao_parcial",
-    "3": "colisao_perda_total",
-    "4": "incendio",
-    "9": "outras_coberturas",
+# Confirmado no layout oficial "Estrutura dos Arquivos R_AUTO e S_AUTO" (versão
+# 12/2023, baixado de dadosabertos.susep.gov.br/dadosabertos/auto_apos_2006/
+# Dados_AUTO.pdf): S_AUTO é MICRODADO real — um registro por sinistro avisado,
+# já anonimizado (COD_APO/COD_ENDOSSO substituem apólice/endosso reais). Não é
+# a base agregada do AUTOSEG; nenhuma geração sintética é necessária aqui.
+COLUMN_MAPPING = {
+    "COD_APO": "policy_id",
+    "D_OCORR": "event_timestamp",
+    "INDENIZ": "amount",
+    "REGIAO": "region",
+    "CAUSA": "cause_code",
 }
 
-# Nomes de coluna candidatos para as chaves de agrupamento — não confirmados no
-# dicionário oficial consultado (que documentava só as colunas de medida). Ajustar
-# assim que o CSV real for inspecionado.
-REGION_COLUMN_CANDIDATES = ["REGIAO", "regiao", "REGIAO_CIRCULACAO", "UF", "uf"]
-
-AMOUNT_LOG_STDDEV = 0.4  # dispersão em torno da indenização média do grupo
-
-
-def _find_region(row: pd.Series) -> str:
-    for candidate in REGION_COLUMN_CANDIDATES:
-        if candidate in row and pd.notna(row[candidate]):
-            return str(row[candidate])
-    return "UNKNOWN"
+# Tabela V do layout oficial (Códigos de causas de sinistros).
+CAUSE_LABELS = {
+    1: "roubo_furto",
+    2: "roubo",
+    3: "furto",
+    4: "colisao_parcial",
+    5: "colisao_indenizacao_integral",
+    6: "incendio",
+    7: "assistencia_24h",
+    9: "outros",
+}
 
 
-def _random_timestamp(start: datetime, end: datetime, rng: np.random.Generator) -> datetime:
-    span_seconds = max(int((end - start).total_seconds()), 1)
-    offset = int(rng.integers(0, span_seconds))
-    return start + timedelta(seconds=offset)
+def _decode_cause(cause_code: float) -> str:
+    if pd.isna(cause_code):
+        return "outros"
+    return CAUSE_LABELS.get(int(cause_code), "outros")
 
 
-def generate_synthetic_claims(
-    aggregates_df: pd.DataFrame,
-    reference_period_start: datetime,
-    reference_period_end: datetime,
-    random_seed: int = 42,
-) -> pd.DataFrame:
-    rng = np.random.default_rng(random_seed)
-    synthetic_rows = []
+def normalize_susep_claims(df: pd.DataFrame) -> pd.DataFrame:
+    normalized = apply_column_mapping(df, COLUMN_MAPPING)
 
-    for _, row in aggregates_df.iterrows():
-        region = _find_region(row)
+    normalized["claim_id"] = [str(uuid.uuid4()) for _ in range(len(normalized))]
 
-        for suffix, label in COVERAGE_LABELS.items():
-            freq_col = f"FREQ_SIN{suffix}"
-            indeniz_col = f"INDENIZ{suffix}"
-            if freq_col not in row or indeniz_col not in row:
-                continue
+    # D_OCORR vem no formato AAAAMMDD (ex: "20200504"); linhas com data
+    # ausente/corrompida viram NaT e são isoladas como malformadas no Bronze.
+    normalized["event_timestamp"] = pd.to_datetime(
+        normalized["event_timestamp"].astype(str), format="%Y%m%d", errors="coerce"
+    )
 
-            frequency = int(row[freq_col]) if pd.notna(row[freq_col]) else 0
-            total_indeniz = float(row[indeniz_col]) if pd.notna(row[indeniz_col]) else 0.0
-            if frequency <= 0 or total_indeniz <= 0:
-                continue
+    normalized["amount"] = pd.to_numeric(normalized["amount"], errors="coerce")
+    normalized["region"] = normalized["region"].astype(str)
+    normalized["vehicle_type"] = normalized["cause_code"].apply(_decode_cause)
 
-            avg_amount = total_indeniz / frequency
-            sampled_amounts = rng.lognormal(
-                mean=np.log(max(avg_amount, 1.0)), sigma=AMOUNT_LOG_STDDEV, size=frequency
-            )
+    normalized["policy_id"] = normalized["policy_id"].apply(
+        lambda value: str(value) if pd.notna(value) else str(uuid.uuid4())
+    )
+    normalized["customer_id"] = None
+    normalized["event_type"] = "claim-opened"
+    normalized["source"] = "susep"
 
-            for amount in sampled_amounts:
-                synthetic_rows.append(
-                    {
-                        "claim_id": str(uuid.uuid4()),
-                        "policy_id": None,
-                        "customer_id": None,
-                        "event_type": "claim-opened",
-                        "event_timestamp": _random_timestamp(
-                            reference_period_start, reference_period_end, rng
-                        ),
-                        "amount": round(float(amount), 2),
-                        "region": region,
-                        "vehicle_type": label,
-                        "source": "susep_synthetic",
-                    }
-                )
-
-    return pd.DataFrame(synthetic_rows)
+    return normalized.drop(columns=["cause_code"], errors="ignore")
 
 
 def load_claim_events(csv_path: str, source_config: dict) -> pd.DataFrame:
-    reference_period_start = datetime.fromisoformat(source_config["reference_period_start"])
-    reference_period_end = datetime.fromisoformat(source_config["reference_period_end"])
-
-    aggregates_df = read_csv_safely(csv_path)
-    return generate_synthetic_claims(aggregates_df, reference_period_start, reference_period_end)
+    sample_rows = source_config.get("sample_rows")
+    raw_df = read_csv_safely(csv_path, encoding="latin-1", sep=";", sample_rows=sample_rows)
+    return normalize_susep_claims(raw_df)

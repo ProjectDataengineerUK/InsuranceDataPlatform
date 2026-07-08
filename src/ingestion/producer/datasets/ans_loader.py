@@ -11,13 +11,19 @@ ANS_OPEN_DATA_PORTAL = "https://dadosabertos.ans.gov.br/FTP/PDA/dados_de_benefic
 # movimentação cadastral de beneficiário (inclusão, cancelamento, reativação,
 # retificação), não um agregado — ao contrário da SUSEP. `ID_MOTIVO_MOVIMENTO`
 # identifica o tipo de movimento; usamos isso para inferir o event_type.
+#
+# Nomes de coluna validados contra um CSV real baixado (sib_ativo_AC.csv,
+# 2026-07-08) — o dicionário chama a operadora de CD_OPERADORA, mas o arquivo
+# real usa REGISTRO_OPERADORA. DT_INCLUSAO vem em granularidade AAAA-MM (sem
+# dia), tratado separadamente abaixo.
 COLUMN_MAPPING = {
-    "CD_OPERADORA": "operator_code",
+    "REGISTRO_OPERADORA": "operator_code",
     "CD_PLANO_RPS": "policy_id",
     "CD_PLANO_SCPA": "policy_id_legacy",
     "DT_INCLUSAO": "event_timestamp",
     "ID_MOTIVO_MOVIMENTO": "movement_reason_code",
     "TP_SEXO": "sex",
+    "SG_UF": "region",
 }
 
 # Códigos confirmados no dicionário oficial (ID_MOTIVO_MOVIMENTO).
@@ -50,20 +56,27 @@ def normalize_ans_policies(df: pd.DataFrame) -> pd.DataFrame:
     else:
         normalized["event_type"] = "policy-updated"
 
+    # DT_INCLUSAO vem em granularidade AAAA-MM (confirmado no CSV real); sem
+    # o dia, o parser de TimestampType do Spark rejeitaria o valor como
+    # malformado. Normaliza para o dia 1 do mês.
+    normalized["event_timestamp"] = pd.to_datetime(
+        normalized["event_timestamp"], format="%Y-%m", errors="coerce"
+    )
+
     # A ANS não expõe um identificador de beneficiário reutilizável (anonimização
-    # LGPD) — customer_id, premium_amount, coverage_type e region não estão
-    # disponíveis neste dataset e ficam null até uma fonte complementar ser
-    # identificada.
+    # LGPD) — customer_id, premium_amount e coverage_type não estão disponíveis
+    # neste dataset e ficam null até uma fonte complementar ser identificada.
     normalized["customer_id"] = None
     normalized["premium_amount"] = None
     normalized["coverage_type"] = None
-    normalized["region"] = None
+    if "region" not in normalized.columns:
+        normalized["region"] = None
     normalized["source"] = "ans"
 
     return normalized.drop(columns=["policy_id_legacy", "movement_reason_code"], errors="ignore")
 
 
 def load_policy_events(csv_path: str, source_config: dict) -> pd.DataFrame:
-    del source_config  # não utilizado — mantido para uma interface uniforme com load_claim_events
-    raw_df = read_csv_safely(csv_path)
+    sample_rows = source_config.get("sample_rows")
+    raw_df = read_csv_safely(csv_path, sample_rows=sample_rows)
     return normalize_ans_policies(raw_df)

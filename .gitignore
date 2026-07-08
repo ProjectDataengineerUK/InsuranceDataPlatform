@@ -12,6 +12,7 @@ venv/
 .terraform.lock.hcl
 data/*.csv
 data/*.json
+data/*.zip
 .env
 .DS_Store
 terraform/environments/*.tfvars
