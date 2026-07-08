@@ -1,0 +1,48 @@
+name: Producer
+
+# Mantém o pipeline realmente alimentado com eventos: sem isso, os jobs
+# contínuos no Databricks (bronze_ingest, silver_transform, fraud_score_stream)
+# ficam de pé mas ociosos, sem nenhuma mensagem chegando no Kafka.
+#
+# Roda em rajadas curtas a cada 10 min (em vez de um processo always-on) pra
+# não precisar de nenhuma infraestrutura nova além do que já está configurado
+# aqui no GitHub — reusa os mesmos secrets CONFLUENT_* que o Terraform já usa.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+    inputs:
+      duration_seconds:
+        description: "Por quantos segundos publicar eventos nesta execução manual"
+        required: false
+        default: "480"
+
+concurrency:
+  group: insurance-producer
+  cancel-in-progress: false
+
+jobs:
+  run-producer:
+    runs-on: ubuntu-latest
+    # Folga sobre PRODUCER_MAX_DURATION_SECONDS (480s = 8min) pro processo
+    # encerrar sozinho (flush + return) antes do timeout forçar um kill.
+    timeout-minutes: 9
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run producer
+        env:
+          CONFLUENT_BOOTSTRAP_SERVERS: ${{ secrets.CONFLUENT_BOOTSTRAP_SERVERS }}
+          CONFLUENT_API_KEY: ${{ secrets.CONFLUENT_API_KEY }}
+          CONFLUENT_API_SECRET: ${{ secrets.CONFLUENT_API_SECRET }}
+          PRODUCER_MAX_DURATION_SECONDS: ${{ github.event.inputs.duration_seconds || '480' }}
+        run: python -m src.ingestion.producer.main

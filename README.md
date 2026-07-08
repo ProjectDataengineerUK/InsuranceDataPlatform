@@ -39,20 +39,25 @@ pytest tests/unit
 pytest tests/integration
 ```
 
-### Baixando os datasets públicos
+### Datasets públicos usados
 
-1. **SUSEP** — acesse [Bases de Dados Anonimizadas](https://www.gov.br/susep/pt-br/central-de-conteudos/dados-estatisticos/bases-anonimizadas) e baixe o CSV mais recente do sistema AUTOSEG (seguros de automóvel). **Importante:** este dataset é agregado (contagens/somas por categoria tarifária, região, modelo, ano — ver `DEFINICOES_AUTOSEG.pdf` no mesmo site), não um registro por sinistro. `susep_loader.py` gera sinistros sintéticos calibrados nessas distribuições reais — ver `docs/ARCHITECTURE.md`.
-2. **ANS** — acesse o [FTP de dados abertos](https://dadosabertos.ans.gov.br/FTP/PDA/dados_de_beneficiarios_por_operadora/) e baixe o CSV do período mais recente. Este dataset é real, um registro por movimentação de beneficiário (inclusão/cancelamento/reativação) — schema confirmado em `ans_loader.py`.
-3. Configure as URLs em `src/ingestion/producer/config.yaml` (`sources.susep.dataset_url`, `sources.ans.dataset_url`) — os portais versionam os recursos por período, então não há um link fixo.
+1. **SUSEP** — microdados reais de sinistros de auto (um registro por sinistro avisado, já anonimizado), baixados automaticamente pelo producer a partir de `sources.susep.dataset_url` em `config.yaml` — ver layout oficial em [Bases de Dados Anonimizadas](https://www.gov.br/susep/pt-br/central-de-conteudos/dados-estatisticos/bases-anonimizadas).
+2. **ANS** — movimentação real de beneficiários (inclusão/cancelamento/reativação), baixada a partir de `sources.ans.dataset_url` — schema confirmado em `ans_loader.py`, portal em [dados abertos ANS](https://dadosabertos.ans.gov.br/FTP/PDA/dados_de_beneficiarios_por_operadora/).
 
-### Rodando o producer localmente
+Os portais versionam os recursos por período — se o link em `config.yaml` expirar, é só localizar a versão atual no portal e atualizar `dataset_url`.
+
+### Producer — como ele fica rodando
+
+O producer (baixa o CSV, normaliza e publica no Kafka) **roda automaticamente via GitHub Actions** (`.github/workflows/producer.yml`): um `schedule` de 10 em 10 minutos dispara uma execução que publica eventos por até 8 minutos (`PRODUCER_MAX_DURATION_SECONDS`) e encerra sozinha (flush gracioso, sem depender de kill forçado), reusando os secrets `CONFLUENT_*` já configurados. Sem essa automação, os jobs contínuos no Databricks (`bronze_ingest`, `silver_transform`, `fraud_score_stream`) ficam de pé mas ociosos — nenhum evento chega no Kafka.
+
+Pra rodar manualmente (debug local, ou uma rajada mais longa sob demanda):
 
 ```bash
 export CONFLUENT_BOOTSTRAP_SERVERS="..."
 export CONFLUENT_API_KEY="..."
 export CONFLUENT_API_SECRET="..."
 
-python -m src.ingestion.producer.main
+python -m src.ingestion.producer.main   # loop infinito por padrão (replay.loop: true)
 ```
 
 Ou via Docker:
@@ -61,6 +66,8 @@ Ou via Docker:
 docker build -f src/ingestion/producer/Dockerfile -t insurance-producer .
 docker run --env-file .env insurance-producer
 ```
+
+Ou disparando o workflow manualmente pela aba Actions do GitHub (`workflow_dispatch`, com `duration_seconds` configurável).
 
 ## Deploy
 

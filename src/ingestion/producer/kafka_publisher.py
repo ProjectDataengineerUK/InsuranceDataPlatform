@@ -34,12 +34,20 @@ def publish_events(
     events_per_minute: int,
     shuffle: bool = True,
     loop: bool = True,
+    max_duration_seconds: float | None = None,
 ) -> Iterator[dict[str, Any]]:
     if not events:
         raise ValueError(f"no events to publish for topic '{topic}'")
 
     delay_seconds = 60.0 / max(events_per_minute, 1)
     ordered_events = list(events)
+    start_time = time.monotonic()
+
+    def _duration_exceeded() -> bool:
+        return (
+            max_duration_seconds is not None
+            and (time.monotonic() - start_time) >= max_duration_seconds
+        )
 
     while True:
         batch = ordered_events[:]
@@ -47,6 +55,10 @@ def publish_events(
             random.shuffle(batch)
 
         for event in batch:
+            if _duration_exceeded():
+                producer.flush()
+                return
+
             key = str(event.get("claim_id") or event.get("policy_id") or event.get("customer_id"))
             payload = json.dumps(event, default=str).encode("utf-8")
             producer.produce(
@@ -60,5 +72,5 @@ def publish_events(
             time.sleep(delay_seconds)
 
         producer.flush()
-        if not loop:
+        if not loop or _duration_exceeded():
             break

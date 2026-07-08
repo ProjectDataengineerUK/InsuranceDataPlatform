@@ -48,11 +48,19 @@ def run_source(source_name: str, source_config: dict, config: dict) -> None:
     topic = config["topics"][topic_key]
     replay_cfg = config["replay"]
 
+    # Uso manual/local (docker run) continua em loop indefinido por padrão.
+    # A execução agendada via GitHub Actions (.github/workflows/producer.yml)
+    # seta essa env var pra encerrar de forma graciosa (flush + return) antes
+    # do timeout do job, em vez de depender de um kill forçado no meio do envio.
+    max_duration_env = os.environ.get("PRODUCER_MAX_DURATION_SECONDS")
+    max_duration_seconds = float(max_duration_env) if max_duration_env else None
+
     logger.info(
-        "starting producer for source=%s topic=%s events_per_minute=%s",
+        "starting producer for source=%s topic=%s events_per_minute=%s max_duration_seconds=%s",
         source_name,
         topic,
         replay_cfg["events_per_minute"],
+        max_duration_seconds,
     )
 
     for _ in publish_events(
@@ -62,6 +70,7 @@ def run_source(source_name: str, source_config: dict, config: dict) -> None:
         events_per_minute=replay_cfg["events_per_minute"],
         shuffle=replay_cfg["shuffle"],
         loop=replay_cfg["loop"],
+        max_duration_seconds=max_duration_seconds,
     ):
         pass
 

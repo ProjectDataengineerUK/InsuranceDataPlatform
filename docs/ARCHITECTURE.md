@@ -11,7 +11,7 @@ Plataforma de dados de seguros 100% Databricks: ingestão de dados públicos rea
       │            │
       └─────┬──────┘
             ▼
-    Kafka Producer (Docker)
+    Kafka Producer (GitHub Actions, cron 10 em 10 min)
             ▼
    Confluent Cloud (Kafka)
             ▼
@@ -38,6 +38,7 @@ Plataforma de dados de seguros 100% Databricks: ingestão de dados públicos rea
 
 - **Spark Structured Streaming puro, sem DLT/Lakeflow**: decisão deliberada para demonstrar domínio de streaming nativo, não de pipelines declarativos.
 - **Kafka no Confluent Cloud**: Databricks não hospeda Kafka nativamente; o producer roda fora da plataforma para simular fielmente uma fonte de eventos externa real.
+- **Producer agendado no GitHub Actions, não always-on**: em vez de um processo contínuo (que exigiria hospedar um worker em algum lugar — custo/infra nova), `.github/workflows/producer.yml` publica em rajadas de até 8 min a cada 10 min, reusando os secrets `CONFLUENT_*` que já existem no repo. `PRODUCER_MAX_DURATION_SECONDS` faz o processo encerrar sozinho (flush gracioso) antes do timeout do job.
 - **Workspace único, catálogos por ambiente**: equilíbrio entre custo de portfólio e evolução real para produção (ver Decision 4 do DESIGN).
 - **Framework de qualidade custom em PySpark**: substitui `@dlt.expect_or_drop`, mantendo a decisão "100% Spark".
 - **SUSEP + ANS obrigatórios; Open Insurance Brasil como fast-follow**: a Fase 1 do Open Insurance exige credenciamento no diretório sandbox, o que adicionaria uma dependência externa fora do controle do time.
