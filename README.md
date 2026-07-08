@@ -84,13 +84,19 @@ O CI/CD (`.github/workflows/deploy.yml`) automatiza os dois passos acima para `d
 
 **Sobre o state do Terraform no CI:** usamos backend `local`, com o arquivo `terraform.tfstate` restaurado/salvo via `actions/cache` entre execuções do workflow (sem depender de um serviço externo como HCP Terraform). O workflow usa `concurrency` para nunca rodar dois deploys em paralelo, mas não há lock distribuído de verdade — ver limitações em [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-### Governança pós-deploy
+### Governança
 
-Depois do primeiro deploy do job Gold (que cria a tabela `claims`), aplique o masking de `customer_id`:
+O masking de `customer_id` é aplicado automaticamente: o job `gold_aggregate` (a cada execução, 10 em 10 min) reaplica o `CREATE OR REPLACE FUNCTION` + `ALTER TABLE ... SET MASK` via `apply_governance()` em `src/streaming/gold_aggregate.py`, assim que a tabela `gold.claims` existir. Não há passo manual a rodar após o deploy. `sql/governance_setup.sql` fica só como referência/fallback caso precise ser aplicado manualmente fora do job (ex.: workspace novo, antes do primeiro run).
+
+### Validação de latência e volume (AT-001 / AT-003)
+
+Depois que o pipeline estiver rodando de verdade em `dev` (producer publicando no Kafka + jobs `bronze_ingest`/`fraud_score_stream` ativos), rode:
 
 ```bash
-databricks sql query --file sql/governance_setup.sql
+python scripts/measure_pipeline_latency.py --catalog insurance_dev
 ```
+
+Mede latência Kafka→Bronze (alvo < 2 min), latência de visibilidade do score de fraude Bronze→Gold (alvo < 1 min) e volume ingerido por minuto vs. os `replay.events_per_minute` configurados no producer. Só produz números reais com o pipeline em execução — não substitui rodar o sistema de verdade.
 
 ## Estrutura do projeto
 

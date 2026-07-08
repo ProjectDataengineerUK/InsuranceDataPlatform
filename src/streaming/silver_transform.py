@@ -1,11 +1,11 @@
 import argparse
 
-from delta.tables import DeltaTable
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.functions import col, row_number
 from pyspark.sql.streaming import StreamingQuery
 from pyspark.sql.window import Window
 
+from src.common.delta_merge import merge_into_delta
 from src.common.spark_session import get_spark
 from src.quality.checks import check_not_null, check_unique, persist_results
 
@@ -16,27 +16,6 @@ def _deduplicate(df: DataFrame, key_column: str, order_column: str) -> DataFrame
         df.withColumn("_row_number", row_number().over(window))
         .filter("_row_number = 1")
         .drop("_row_number")
-    )
-
-
-def _merge_into_silver(
-    batch_df: DataFrame,
-    silver_table: str,
-    key_column: str,
-) -> None:
-    if not batch_df.sparkSession.catalog.tableExists(silver_table):
-        batch_df.write.format("delta").mode("overwrite").partitionBy("event_date").saveAsTable(
-            silver_table
-        )
-        return
-
-    delta_table = DeltaTable.forName(batch_df.sparkSession, silver_table)
-    (
-        delta_table.alias("target")
-        .merge(batch_df.alias("source"), f"target.{key_column} = source.{key_column}")
-        .whenMatchedUpdateAll()
-        .whenNotMatchedInsertAll()
-        .execute()
     )
 
 
@@ -57,7 +36,7 @@ def process_batch(
     results.append(check_unique(deduped, [key_column], silver_table))
     persist_results(batch_df.sparkSession, results, results_table)
 
-    _merge_into_silver(deduped, silver_table, key_column)
+    merge_into_delta(deduped, silver_table, key_column)
 
 
 def run_silver_transform(

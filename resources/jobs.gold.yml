@@ -8,18 +8,23 @@ resources:
         pause_status: UNPAUSED
 
       # Workspace trial só permite compute serverless — environment_key obrigatório.
+      # Lê de gold.claims, que é populado continuamente pelo job
+      # fraud_score_stream (ver resources/jobs.fraud_score.yml) — este job só
+      # recalcula os agregados por região e reaplica a governança.
       tasks:
         - task_key: gold_claims_agg
           environment_key: default
           spark_python_task:
             python_file: ../src/streaming/gold_aggregate.py
             parameters:
-              - "--silver-table"
-              - "${var.catalog}.silver.claims"
+              - "--catalog"
+              - "${var.catalog}"
               - "--gold-claims-table"
               - "${var.catalog}.gold.claims"
               - "--gold-agg-table"
               - "${var.catalog}.gold.claims_region_agg"
+              - "--results-table"
+              - "${var.catalog}.monitoring._dq_results"
               - "--run-date"
               - "{{job.start_time.iso_date}}"
 

@@ -1,5 +1,7 @@
--- Executar manualmente (ou via job Databricks pós-deploy) depois que o job Gold
--- criar a tabela `claims` pela primeira vez. Requer privilégio de owner no catálogo.
+-- Mantido apenas como referência/fallback manual. Desde a automação do
+-- masking, o job gold_aggregate (src/streaming/gold_aggregate.py,
+-- apply_governance()) já reaplica este SQL a cada execução — não é mais
+-- necessário rodar isto manualmente após um deploy normal.
 -- Substitua {catalog} pelo catálogo do ambiente (insurance_dev/staging/prod).
 
 CREATE OR REPLACE FUNCTION {catalog}.gold.mask_customer_id(customer_id STRING)

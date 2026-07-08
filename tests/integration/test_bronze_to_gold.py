@@ -1,6 +1,7 @@
 from datetime import datetime
 
-from src.streaming.gold_aggregate import build_claims_gold, build_region_aggregates
+from src.fraud.streaming_gold import build_claims_gold
+from src.streaming.gold_aggregate import build_region_aggregates
 from src.streaming.silver_transform import _deduplicate
 
 

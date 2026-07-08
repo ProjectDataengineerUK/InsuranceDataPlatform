@@ -1,0 +1,30 @@
+resources:
+  jobs:
+    fraud_score_stream:
+      name: insurance-fraud-score-stream-${bundle.target}
+      continuous:
+        pause_status: UNPAUSED
+      max_concurrent_runs: 1
+
+      # Contínuo e desacoplado do agregado Gold (que roda a cada 10 min) para
+      # atender ao Success Criteria original do DEFINE: score de fraude
+      # visível em < 1 min. Trigger de 30s dá folga sobre esse alvo.
+      tasks:
+        - task_key: fraud_score_claims
+          environment_key: default
+          spark_python_task:
+            python_file: ../src/fraud/streaming_gold.py
+            parameters:
+              - "--silver-table"
+              - "${var.catalog}.silver.claims"
+              - "--gold-claims-table"
+              - "${var.catalog}.gold.claims"
+              - "--checkpoint-path"
+              - "/Volumes/${var.catalog}/gold/_checkpoints/claims"
+              - "--results-table"
+              - "${var.catalog}.monitoring._dq_results"
+
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "2"

@@ -5,36 +5,26 @@ from pyspark.sql.functions import avg, col, count, lit, when
 from pyspark.sql.functions import sum as spark_sum
 
 from src.common.spark_session import get_spark
-from src.fraud.streaming_score import DEFAULT_SCORE_THRESHOLD, score_claims
+from src.quality.checks import check_not_null, persist_results
 
-DEFAULT_AUTO_APPROVAL_AMOUNT_THRESHOLD = 5000.0
+# Idempotentes: seguro reaplicar a cada execução do job. Substitui o passo
+# manual `databricks sql query --file sql/governance_setup.sql` documentado
+# no README — mantido em sql/ apenas como referência/fallback.
+GOVERNANCE_MASK_FUNCTION_SQL = """
+CREATE OR REPLACE FUNCTION {catalog}.gold.mask_customer_id(customer_id STRING)
+RETURNS STRING
+RETURN
+  CASE
+    WHEN is_account_group_member('insurance-data-team') THEN customer_id
+    ELSE sha2(customer_id, 256)
+  END
+"""
 
-
-def apply_auto_approval(
-    df: DataFrame,
-    amount_threshold: float = DEFAULT_AUTO_APPROVAL_AMOUNT_THRESHOLD,
-    fraud_threshold: float = DEFAULT_SCORE_THRESHOLD,
-) -> DataFrame:
-    is_low_value = col("amount") <= lit(amount_threshold)
-    is_low_risk = col("fraud_score") < lit(fraud_threshold)
-    return df.withColumn("auto_approved", is_low_value & is_low_risk)
-
-
-def build_claims_gold(silver_claims_df: DataFrame) -> DataFrame:
-    scored = score_claims(silver_claims_df)
-    return apply_auto_approval(scored).select(
-        "claim_id",
-        "policy_id",
-        "customer_id",
-        "event_timestamp",
-        "amount",
-        "region",
-        "vehicle_type",
-        "fraud_score",
-        "fraud_flag",
-        "auto_approved",
-        "event_date",
-    )
+GOVERNANCE_APPLY_MASK_SQL = """
+ALTER TABLE {catalog}.gold.claims
+  ALTER COLUMN customer_id
+  SET MASK {catalog}.gold.mask_customer_id
+"""
 
 
 def build_region_aggregates(claims_gold_df: DataFrame) -> DataFrame:
@@ -62,31 +52,52 @@ def _write_gold_partition(
         writer.mode("overwrite").saveAsTable(table_name)
 
 
+def apply_governance(spark: SparkSession, catalog: str, gold_claims_table: str) -> None:
+    """Reaplica o masking de customer_id a cada execução — não depende de um
+    passo manual pós-deploy nem de uma segunda ferramenta de IaC disputando a
+    tabela criada pelos jobs Spark (ver Issue #7 do BUILD_REPORT)."""
+    if not spark.catalog.tableExists(gold_claims_table):
+        return
+
+    spark.sql(GOVERNANCE_MASK_FUNCTION_SQL.format(catalog=catalog))
+    spark.sql(GOVERNANCE_APPLY_MASK_SQL.format(catalog=catalog))
+
+
 def run_gold_job(
-    silver_table: str,
+    catalog: str,
     gold_claims_table: str,
     gold_agg_table: str,
+    results_table: str,
     run_date: str,
 ) -> None:
     spark = get_spark("gold-aggregate")
 
-    silver_df = spark.read.table(silver_table).filter(col("event_date") == lit(run_date))
-    claims_gold_df = build_claims_gold(silver_df)
-    _write_gold_partition(spark, claims_gold_df, gold_claims_table, run_date)
-
+    claims_gold_df = spark.read.table(gold_claims_table).filter(col("event_date") == lit(run_date))
     region_agg_df = build_region_aggregates(claims_gold_df)
+
+    results = check_not_null(region_agg_df, ["region", "event_date"], gold_agg_table)
+    persist_results(spark, results, results_table)
+
     _write_gold_partition(spark, region_agg_df, gold_agg_table, run_date)
+    apply_governance(spark, catalog, gold_claims_table)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--silver-table", required=True)
+    parser.add_argument("--catalog", required=True)
     parser.add_argument("--gold-claims-table", required=True)
     parser.add_argument("--gold-agg-table", required=True)
+    parser.add_argument("--results-table", required=True)
     parser.add_argument("--run-date", required=True)
     args = parser.parse_args()
 
-    run_gold_job(args.silver_table, args.gold_claims_table, args.gold_agg_table, args.run_date)
+    run_gold_job(
+        args.catalog,
+        args.gold_claims_table,
+        args.gold_agg_table,
+        args.results_table,
+        args.run_date,
+    )
 
 
 if __name__ == "__main__":

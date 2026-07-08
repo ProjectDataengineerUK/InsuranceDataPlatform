@@ -23,9 +23,13 @@ Plataforma de dados de seguros 100% Databricks: ingestão de dados públicos rea
             ▼
       Silver Delta
             ▼
-      Gold Job (agregações + fraude + auto-approval)
+      Fraud Score Job (streaming contínuo, <1min — fraude + auto-approval)
             ▼
-      Gold Delta
+      Gold Delta (claims)
+            ▼
+      Gold Aggregate Job (batch, 10 em 10 min — agregados por região + governança)
+            ▼
+      Gold Delta (claims_region_agg)
             ▼
   SQL Warehouse / Dashboards / MLflow / Alertas de SLA
 ```
@@ -52,7 +56,7 @@ Plataforma de dados de seguros 100% Databricks: ingestão de dados públicos rea
 ├── terraform/           # Unity Catalog, secrets (IaC que muda raramente)
 ├── resources/            # Jobs/Workflows via Databricks Asset Bundles
 ├── databricks.yml        # root do bundle (targets dev/staging/prod)
-├── sql/                  # scripts de governança (masking) aplicados pós-deploy
+├── sql/                  # scripts de governança (masking) — referência/fallback; aplicados automaticamente pelo job Gold Aggregate
 ├── tests/                # unit + integration (pytest + Spark local)
 └── .github/workflows/    # CI (lint+test) e Deploy (Terraform + DAB)
 ```
