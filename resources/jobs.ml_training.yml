@@ -7,17 +7,9 @@ resources:
         timezone_id: "America/Sao_Paulo"
         pause_status: UNPAUSED
 
-      job_clusters:
-        - job_cluster_key: ml_cluster
-          new_cluster:
-            spark_version: 15.4.x-scala2.12
-            node_type_id: Standard_DS3_v2
-            num_workers: 1
-            data_security_mode: SINGLE_USER
-
+      # Workspace trial só permite compute serverless.
       tasks:
         - task_key: train_fraud_model
-          job_cluster_key: ml_cluster
           spark_python_task:
             python_file: ../src/fraud/train_model.py
             parameters:

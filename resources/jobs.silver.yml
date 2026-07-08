@@ -6,17 +6,9 @@ resources:
         pause_status: UNPAUSED
       max_concurrent_runs: 1
 
-      job_clusters:
-        - job_cluster_key: streaming_cluster
-          new_cluster:
-            spark_version: 15.4.x-scala2.12
-            node_type_id: Standard_DS3_v2
-            num_workers: 1
-            data_security_mode: SINGLE_USER
-
+      # Workspace trial só permite compute serverless.
       tasks:
         - task_key: silver_claims
-          job_cluster_key: streaming_cluster
           spark_python_task:
             python_file: ../src/streaming/silver_transform.py
             parameters:
@@ -32,7 +24,6 @@ resources:
               - "${var.catalog}.monitoring._dq_results"
 
         - task_key: silver_policies
-          job_cluster_key: streaming_cluster
           spark_python_task:
             python_file: ../src/streaming/silver_transform.py
             parameters:

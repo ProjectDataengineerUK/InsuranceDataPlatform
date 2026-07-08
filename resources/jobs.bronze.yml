@@ -6,17 +6,10 @@ resources:
         pause_status: UNPAUSED
       max_concurrent_runs: 1
 
-      job_clusters:
-        - job_cluster_key: streaming_cluster
-          new_cluster:
-            spark_version: 15.4.x-scala2.12
-            node_type_id: Standard_DS3_v2
-            num_workers: 1
-            data_security_mode: SINGLE_USER
-
+      # Workspace trial só permite compute serverless — nenhuma task declara
+      # job_cluster_key/new_cluster, o Databricks aloca serverless automático.
       tasks:
         - task_key: bronze_claims
-          job_cluster_key: streaming_cluster
           spark_python_task:
             python_file: ../src/streaming/bronze_ingest.py
             parameters:
@@ -28,7 +21,6 @@ resources:
               - "/Volumes/${var.catalog}/bronze/_checkpoints/claim-opened"
 
         - task_key: bronze_policies
-          job_cluster_key: streaming_cluster
           spark_python_task:
             python_file: ../src/streaming/bronze_ingest.py
             parameters:
@@ -40,7 +32,6 @@ resources:
               - "/Volumes/${var.catalog}/bronze/_checkpoints/policy-created"
 
         - task_key: bronze_customers
-          job_cluster_key: streaming_cluster
           spark_python_task:
             python_file: ../src/streaming/bronze_ingest.py
             parameters:

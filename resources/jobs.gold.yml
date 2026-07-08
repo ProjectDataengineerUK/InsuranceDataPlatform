@@ -7,17 +7,9 @@ resources:
         timezone_id: "America/Sao_Paulo"
         pause_status: UNPAUSED
 
-      job_clusters:
-        - job_cluster_key: batch_cluster
-          new_cluster:
-            spark_version: 15.4.x-scala2.12
-            node_type_id: Standard_DS3_v2
-            num_workers: 1
-            data_security_mode: SINGLE_USER
-
+      # Workspace trial só permite compute serverless.
       tasks:
         - task_key: gold_claims_agg
-          job_cluster_key: batch_cluster
           spark_python_task:
             python_file: ../src/streaming/gold_aggregate.py
             parameters:
@@ -31,7 +23,6 @@ resources:
               - "{{job.start_time.iso_date}}"
 
         - task_key: sla_monitor
-          job_cluster_key: batch_cluster
           depends_on:
             - task_key: gold_claims_agg
           spark_python_task:
