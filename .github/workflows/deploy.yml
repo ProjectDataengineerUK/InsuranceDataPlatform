@@ -102,10 +102,17 @@ jobs:
           path: terraform/terraform.tfstate
           key: tfstate-prod-${{ github.run_id }}
 
+      - name: Read SQL Warehouse ID (prod)
+        id: warehouse
+        working-directory: terraform
+        run: echo "sql_warehouse_id=$(terraform output -raw sql_warehouse_id)" >> "$GITHUB_OUTPUT"
+
       - uses: databricks/setup-cli@main
 
       - name: Deploy bundle (prod)
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_DEV }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_DEV }}
-        run: databricks bundle deploy -t prod
+        run: |
+          databricks bundle deploy -t prod \
+            --var="sql_warehouse_id=${{ steps.warehouse.outputs.sql_warehouse_id }}"

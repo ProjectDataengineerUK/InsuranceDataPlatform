@@ -133,16 +133,18 @@ Módulo separado do pipeline operacional: simula 3 seguradoras/bancos fictícios
 
 Camada de apresentação sobre o Gold já existente — nenhuma tabela/pipeline novo. Só existe no target `prod` (`resources/visualization.yml`, dentro de `targets.prod.resources`); `dev`/`staging` não ganham nenhum recurso desta feature. Detalhes de design em [`.claude/sdd/features/DESIGN_INSURANCE_VISUALIZATION_LAYER.md`](.claude/sdd/features/DESIGN_INSURANCE_VISUALIZATION_LAYER.md) e decisões duradouras em [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-#### Ativando a camada de visualização (passos manuais, uma vez)
+#### Ativando a camada de visualização
 
-1. `terraform apply` (ambiente prod) cria o SQL Warehouse serverless (`terraform/warehouse.tf`).
-2. `databricks bundle deploy -t prod --var="sql_warehouse_id=$(terraform -chdir=terraform output -raw sql_warehouse_id)"` deploya o Databricks App (`apps/insurance_platform_app/`) — isso minta um service principal dedicado pro app.
-3. Copie o `client_id` desse service principal (Databricks UI → Apps → insurance-platform-app) e rode `terraform apply -var="app_service_principal_id=<client_id>"` (ambiente prod) — concede `SELECT` em `gold`/`monitoring` pra esse principal.
-4. Prototipe o AI/BI Dashboard e o Genie Space interativamente na UI do workspace prod (usando o warehouse do passo 1).
-5. Capture os dois no bundle: `databricks bundle generate dashboard --existing-id <id>` e `databricks bundle generate genie-space --existing-id <id>` — isso adiciona os blocos `dashboards:`/`genie_spaces:` em `resources/visualization.yml` + os arquivos de definição correspondentes.
-6. Commit os arquivos gerados nos passos 4/5 e faça o deploy de novo.
+Os 2 primeiros passos já são automáticos: o job `deploy-prod` do `deploy.yml` roda `terraform apply` (cria o SQL Warehouse serverless, `terraform/warehouse.tf`) e já lê `terraform output -raw sql_warehouse_id` pra passar como `--var` no `databricks bundle deploy -t prod` — nenhuma intervenção manual necessária pra isso a cada push em `main`. Isso deploya o Databricks App (`apps/insurance_platform_app/`), que minta um service principal dedicado.
 
-Sem os passos 1–3, o app fica no ar mas as páginas de consulta mostram erro de permissão (degradação esperada, não uma falha silenciosa — ver `apps/insurance_platform_app/pages/status.py`).
+Passos manuais restantes (uma vez):
+
+1. Copie o `client_id` desse service principal (Databricks UI → Apps → insurance-platform-app) e rode `terraform apply -var="app_service_principal_id=<client_id>"` (ambiente prod) — concede `SELECT` em `gold`/`monitoring` pra esse principal.
+2. Prototipe o AI/BI Dashboard e o Genie Space interativamente na UI do workspace prod (usando o warehouse já criado pelo passo automático acima).
+3. Capture os dois no bundle: `databricks bundle generate dashboard --existing-id <id>` e `databricks bundle generate genie-space --existing-id <id>` — isso adiciona os blocos `dashboards:`/`genie_spaces:` em `resources/visualization.yml` + os arquivos de definição correspondentes.
+4. Commit os arquivos gerados no passo 2/3 e faça push — o próximo deploy automático já inclui os dois.
+
+Sem o passo 1, o app fica no ar mas as páginas de consulta mostram erro de permissão (degradação esperada, não uma falha silenciosa — ver `apps/insurance_platform_app/pages/status.py`).
 
 ## Estrutura do projeto
 
