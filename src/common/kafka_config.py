@@ -25,8 +25,11 @@ def get_kafka_options(topic: str, secret_scope: str = "insurance-platform") -> d
     api_key = _get_secret(secret_scope, "confluent-api-key", "CONFLUENT_API_KEY")
     api_secret = _get_secret(secret_scope, "confluent-api-secret", "CONFLUENT_API_SECRET")
 
+    # O conector Kafka do Databricks Runtime usa o Kafka client sombreado sob
+    # kafkashaded.org.apache.kafka.* — referenciar a classe não-sombreada
+    # (org.apache.kafka...) faz a JVM não achar o LoginModule em runtime.
     jaas_config = (
-        "org.apache.kafka.common.security.plain.PlainLoginModule required "
+        "kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule required "
         f'username="{api_key}" password="{api_secret}";'
     )
 
