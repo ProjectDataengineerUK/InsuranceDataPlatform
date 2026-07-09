@@ -13,7 +13,11 @@ from src.ingestion.producer.datasets.regulatory_feeds import (
     load_insurer_c_events,
 )
 from src.ingestion.producer.datasets.susep_loader import load_claim_events
-from src.ingestion.producer.kafka_publisher import build_producer, publish_events
+from src.ingestion.producer.kafka_publisher import (
+    build_producer,
+    ensure_topic_exists,
+    publish_events,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -46,15 +50,28 @@ def run_source(source_name: str, source_config: dict, config: dict) -> None:
     events = events_df.to_dict(orient="records")
 
     kafka_cfg = config["kafka"]
-    producer = build_producer(
-        bootstrap_servers=os.environ[kafka_cfg["bootstrap_servers_env"]],
-        api_key=os.environ[kafka_cfg["api_key_env"]],
-        api_secret=os.environ[kafka_cfg["api_secret_env"]],
-    )
+    bootstrap_servers = os.environ[kafka_cfg["bootstrap_servers_env"]]
+    api_key = os.environ[kafka_cfg["api_key_env"]]
+    api_secret = os.environ[kafka_cfg["api_secret_env"]]
 
     topic_key = source_config["event_topic"]
     topic = config["topics"][topic_key]
     replay_cfg = config["replay"]
+
+    # Este cluster Confluent Cloud não cria tópicos automaticamente na
+    # primeira produção — confirmado em produção pro tópico novo
+    # regulatory-claim-report (KafkaError _UNKNOWN_TOPIC). Chamado por toda
+    # fonte antes de publicar, mesmo pra tópicos operacionais já existentes
+    # (idempotente — "already exists" é esperado e ignorado). Várias threads
+    # (insurer_a/b/c) podem chamar isso pro MESMO tópico concorrentemente,
+    # sem problema.
+    ensure_topic_exists(bootstrap_servers, api_key, api_secret, topic)
+
+    producer = build_producer(
+        bootstrap_servers=bootstrap_servers,
+        api_key=api_key,
+        api_secret=api_secret,
+    )
 
     # Uso manual/local (docker run) continua em loop indefinido por padrão.
     # A execução agendada via GitHub Actions (.github/workflows/producer.yml)

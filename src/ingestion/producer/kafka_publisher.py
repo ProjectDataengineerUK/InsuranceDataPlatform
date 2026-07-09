@@ -6,8 +6,12 @@ from collections.abc import Iterator
 from typing import Any
 
 from confluent_kafka import Producer
+from confluent_kafka.admin import AdminClient, NewTopic
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_TOPIC_PARTITIONS = 6
+DEFAULT_TOPIC_REPLICATION_FACTOR = 3
 
 
 def build_producer(bootstrap_servers: str, api_key: str, api_secret: str) -> Producer:
@@ -24,6 +28,50 @@ def build_producer(bootstrap_servers: str, api_key: str, api_secret: str) -> Pro
             "enable.metrics.push": False,
         }
     )
+
+
+def ensure_topic_exists(
+    bootstrap_servers: str,
+    api_key: str,
+    api_secret: str,
+    topic: str,
+    num_partitions: int = DEFAULT_TOPIC_PARTITIONS,
+    replication_factor: int = DEFAULT_TOPIC_REPLICATION_FACTOR,
+    request_timeout_seconds: int = 30,
+) -> None:
+    # Este cluster Confluent Cloud não cria tópicos automaticamente na
+    # primeira produção (confirmado em produção: publish_events falhou com
+    # KafkaError{code=_UNKNOWN_TOPIC} pro tópico novo regulatory-claim-report,
+    # enquanto os 3 tópicos operacionais já existentes seguiram funcionando
+    # normalmente). Chamado uma vez por fonte/thread em main.py antes de
+    # publicar — múltiplas threads podem chamar isso para o MESMO tópico
+    # concorrentemente (regulatory-claim-report é compartilhado por
+    # insurer_a/b/c); create_topics é idempotente aqui porque o erro
+    # "already exists" da segunda chamada em diante é esperado e ignorado,
+    # mesmo padrão de append_or_create (src/common/delta_write.py) pra
+    # tabelas Delta criadas concorrentemente.
+    admin_client = AdminClient(
+        {
+            "bootstrap.servers": bootstrap_servers,
+            "security.protocol": "SASL_SSL",
+            "sasl.mechanisms": "PLAIN",
+            "sasl.username": api_key,
+            "sasl.password": api_secret,
+        }
+    )
+    new_topic = NewTopic(
+        topic, num_partitions=num_partitions, replication_factor=replication_factor
+    )
+    futures = admin_client.create_topics([new_topic], request_timeout=request_timeout_seconds)
+
+    for created_topic, future in futures.items():
+        try:
+            future.result()
+            logger.info("created topic %s", created_topic)
+        except Exception as exc:
+            if "already exists" not in str(exc).lower():
+                raise
+            logger.info("topic %s already exists, skipping creation", created_topic)
 
 
 def _delivery_callback(err, msg) -> None:

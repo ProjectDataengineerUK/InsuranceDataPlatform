@@ -1,5 +1,7 @@
 import io
 import logging
+import os
+import uuid
 import zipfile
 from pathlib import Path
 
@@ -26,9 +28,22 @@ def download_csv(url: str, dest_path: str, timeout_seconds: int = 60) -> Path:
             csv_names = [name for name in archive.namelist() if name.lower().endswith(".csv")]
             if not csv_names:
                 raise ValueError(f"no CSV file found inside zip archive from {url}")
-            dest.write_bytes(archive.read(csv_names[0]))
+            content = archive.read(csv_names[0])
     else:
-        dest.write_bytes(response.content)
+        content = response.content
+
+    # Escrita atômica: susep/insurer_a/insurer_b/insurer_c rodam em threads
+    # concorrentes (main.py) apontando pro MESMO dest_path — write_bytes direto
+    # em dest deixa uma janela onde dest.exists() já é True mas o conteúdo
+    # ainda está sendo escrito, e outra thread lendo nesse instante quebra com
+    # EmptyDataError/parse incompleto (confirmado em produção: producer.yml
+    # roda em runner efêmero do GitHub Actions, então esse download acontece
+    # do zero em TODA execução agendada, não só uma vez). Escrever num arquivo
+    # temporário no mesmo diretório e mover com os.replace (atômico em POSIX)
+    # garante que dest só apareça pronto para outras threads depois de completo.
+    tmp_path = dest.parent / f".{dest.name}.{uuid.uuid4().hex}.tmp"
+    tmp_path.write_bytes(content)
+    os.replace(tmp_path, dest)
 
     logger.info("downloaded dataset from %s to %s", url, dest)
     return dest
