@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(_this_file).resolve().parents[2]))
 
 import mlflow
 import pandas as pd
+from mlflow.models import infer_signature
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import f1_score, precision_score, recall_score
 from sklearn.model_selection import train_test_split
@@ -70,10 +71,15 @@ def train_fraud_model(
 
         mlflow.log_params({"n_estimators": 100, "max_depth": 6})
         mlflow.log_metrics(metrics)
+        # Unity Catalog exige assinatura de input/output no modelo (o legacy
+        # Workspace Model Registry aceitava sem, só com um aviso).
+        signature = infer_signature(x_test, predictions)
         mlflow.sklearn.log_model(
             model,
             artifact_path="model",
             registered_model_name=registered_model_name,
+            signature=signature,
+            input_example=x_test.iloc[:5],
         )
 
         return run.info.run_id
