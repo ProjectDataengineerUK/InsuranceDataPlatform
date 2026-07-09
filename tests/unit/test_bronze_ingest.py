@@ -36,11 +36,18 @@ def test_valid_event_is_not_flagged(spark):
     assert result[0]["is_malformed"] is False
 
 
-def test_is_malformed_with_empty_required_fields_only_flags_unparseable_json(spark):
-    # required_fields=[] (usado pelo tópico regulatory-claim-report, que só
-    # exige a chave de junção external_reference_id, checada separadamente
-    # pelo chamador) não deve flagar um payload válido só porque outros
-    # campos de negócio estão nulos — isso é responsabilidade da Silver.
+def test_is_malformed_with_empty_required_fields_never_flags_anything(spark):
+    # Confirmado contra Spark de verdade (CI): from_json em modo PERMISSIVE
+    # (sem columnNameOfCorruptRecord) NUNCA retorna null pro struct inteiro,
+    # nem pra JSON totalmente inválido ("not valid json") — só os campos
+    # internos ficam null. Ou seja, `col("payload").isNull()` sozinho (o termo
+    # base de _is_malformed) não detecta JSON malformado; quem detecta é o
+    # check por campo. required_fields=[] portanto NÃO oferece nenhuma
+    # proteção contra JSON malformado — não é uma configuração segura pra
+    # nenhum job real usar. Por isso regulatory_bronze_ingest sempre passa
+    # pelo menos a chave de junção (--required-fields external_reference_id),
+    # nunca uma lista vazia; este teste documenta esse limite, não valida um
+    # uso de produção.
     raw_df = spark.createDataFrame(
         [("k1", "not valid json", 1), ("k2", '{"claim_id": null}', 2)],
         ["key", "value", "timestamp"],
@@ -52,5 +59,5 @@ def test_is_malformed_with_empty_required_fields_only_flags_unparseable_json(spa
         for row in parsed.withColumn("is_malformed", _is_malformed(parsed, [])).collect()
     }
 
-    assert flags["k1"] is True  # JSON inválido -> payload inteiro é null
-    assert flags["k2"] is False  # JSON válido, mesmo com claim_id nulo
+    assert flags["k1"] is False
+    assert flags["k2"] is False
