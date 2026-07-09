@@ -45,7 +45,7 @@ def _write_batch(batch_df: DataFrame, batch_id: int, bronze_table: str) -> None:
         .select("event_key", "payload.*", "kafka_timestamp", "_ingested_at")
         .withColumn("_ingested_date", col("_ingested_at").cast("date"))
     )
-    if not valid_df.rdd.isEmpty():
+    if not valid_df.isEmpty():
         (
             valid_df.write.format("delta")
             .mode("append")
@@ -60,7 +60,7 @@ def _write_batch(batch_df: DataFrame, batch_id: int, bronze_table: str) -> None:
         .withColumn("_reason", lit("schema_validation_failed"))
         .withColumn("_ingested_date", col("_ingested_at").cast("date"))
     )
-    if not quarantine_df.rdd.isEmpty():
+    if not quarantine_df.isEmpty():
         (
             quarantine_df.write.format("delta")
             .mode("append")

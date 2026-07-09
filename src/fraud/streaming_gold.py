@@ -61,7 +61,7 @@ def process_batch(
     gold_claims_table: str,
     results_table: str,
 ) -> None:
-    if batch_df.rdd.isEmpty():
+    if batch_df.isEmpty():
         return
 
     claims_gold_df = build_claims_gold(batch_df)

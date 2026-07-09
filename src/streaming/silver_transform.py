@@ -36,7 +36,7 @@ def process_batch(
     key_column: str,
     results_table: str,
 ) -> None:
-    if batch_df.rdd.isEmpty():
+    if batch_df.isEmpty():
         return
 
     deduped = _deduplicate(batch_df, key_column, order_column="_ingested_at")
