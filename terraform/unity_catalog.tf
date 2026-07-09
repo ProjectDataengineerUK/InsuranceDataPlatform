@@ -79,6 +79,23 @@ resource "databricks_grants" "gold_read_only_analysts" {
     principal  = var.catalog_owner
     privileges = ["USE_SCHEMA", "CREATE_TABLE", "SELECT", "MODIFY"]
   }
+
+  # Grant do service principal do Databricks App (ver
+  # DESIGN_INSURANCE_VISUALIZATION_LAYER.md, Decision 3) — precisa estar
+  # DENTRO deste mesmo resource, não num databricks_grant separado: essa
+  # combinação foi tentada e falhou na prática (databricks_grants, plural, é
+  # autoritativo por objeto — ele faz refresh lendo TODOS os grants reais do
+  # schema e trata qualquer grant não declarado aqui como drift a reverter,
+  # inclusive um adicionado por um databricks_grant separado no mesmo
+  # securable). Um dynamic "grant" condicional é a única forma segura de ter
+  # os dois grants nesse schema sob um único resource autoritativo.
+  dynamic "grant" {
+    for_each = var.app_service_principal_id != "" ? [var.app_service_principal_id] : []
+    content {
+      principal  = grant.value
+      privileges = ["USE_SCHEMA", "SELECT"]
+    }
+  }
 }
 
 // Volumes gerenciados para checkpoint do Structured Streaming — os jobs
@@ -137,32 +154,21 @@ resource "databricks_grants" "gold_checkpoints_read_write" {
   }
 }
 
-// Grant de leitura pro service principal do Databricks App (ver
-// DESIGN_INSURANCE_VISUALIZATION_LAYER.md, Decision 3) — só existe quando
-// var.app_service_principal_id já foi populado (passo 2 do bootstrap) e só
-// em prod (o App só é deployado em prod). Só SELECT — nunca MODIFY/CREATE_TABLE,
-// princípio de menor privilégio.
-//
-// databricks_grant (singular, aditivo) — não databricks_grants (plural,
-// autoritativo por objeto): o schema gold já tem um databricks_grants
-// existente (gold_read_only_analysts, acima) gerenciando a lista completa de
-// grants daquele securable. Um segundo databricks_grants no MESMO schema
-// entraria em conflito (cada um veria o grant do outro como drift a
-// reverter), arriscando derrubar o acesso do catalog_owner — usado pelos
-// jobs de produção já existentes — a cada apply. databricks_grant gerencia
-// só o par principal+privilégio dele, coexistindo sem conflito.
-resource "databricks_grant" "gold_read_visualization_app" {
-  count      = var.environment == "prod" && var.app_service_principal_id != "" ? 1 : 0
-  schema     = "${databricks_catalog.insurance.name}.${databricks_schema.gold.name}"
-  principal  = var.app_service_principal_id
-  privileges = ["USE_SCHEMA", "SELECT"]
-}
-
+// monitoring não tem um databricks_grants pré-existente (diferente de gold),
+// então um databricks_grant (singular, aditivo) isolado aqui é seguro — não
+// há outro resource autoritativo competindo pelo mesmo securable.
+// depends_on força esta chamada a esperar a modificação de
+// gold_read_only_analysts terminar antes de rodar: as duas mexendo em
+// grants do MESMO principal em objetos diferentes, ao mesmo tempo, na
+// mesma apply, foi o que causou a falha original (erro de precondição do
+// provider ao ler o estado de permissões durante uma corrida).
 resource "databricks_grant" "monitoring_read_visualization_app" {
   count      = var.environment == "prod" && var.app_service_principal_id != "" ? 1 : 0
   schema     = "${databricks_catalog.insurance.name}.${databricks_schema.monitoring.name}"
   principal  = var.app_service_principal_id
   privileges = ["USE_SCHEMA", "SELECT"]
+
+  depends_on = [databricks_grants.gold_read_only_analysts]
 }
 
 // A tabela `claims` em Gold é criada pelos jobs Spark (saveAsTable), não pelo
