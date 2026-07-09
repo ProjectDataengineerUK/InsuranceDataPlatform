@@ -7,7 +7,10 @@ from pathlib import Path
 # Job roda como spark_python_task via workspace files (sem empacotamento em
 # wheel) — Databricks só põe o diretório do próprio script no sys.path, não a
 # raiz do bundle. Sem isso, "from src..." abaixo falha com ModuleNotFoundError.
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+# Databricks executa o job via exec(compile(source, filename, 'exec')), que
+# nao injeta __file__ nos globals — cai pro co_filename do frame atual.
+_this_file = globals().get("__file__") or sys._getframe().f_code.co_filename
+sys.path.insert(0, str(Path(_this_file).resolve().parents[2]))
 
 import requests
 from pyspark.sql import DataFrame
