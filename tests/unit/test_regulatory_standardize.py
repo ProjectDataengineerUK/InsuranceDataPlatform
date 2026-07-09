@@ -74,8 +74,11 @@ def test_standardizes_insurer_c_row(spark):
                 external_reference_id="ref3",
                 source_system="insurer_c",
                 policyId="789",
-                occurrenceDate=f"{float(epoch_millis):E}",
-                amountCents=f"{150000.0:E}",
+                # :.12E preserva precisão total (epoch_millis tem 13 dígitos;
+                # o formato :E default só guarda 6 casas decimais e arredondava,
+                # perdendo ~6min40s no teste original).
+                occurrenceDate=f"{float(epoch_millis):.12E}",
+                amountCents=f"{150000.0:.12E}",
                 regionCode="MG",
                 causeCode="9",
             )
