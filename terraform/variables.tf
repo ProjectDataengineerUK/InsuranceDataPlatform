@@ -42,3 +42,10 @@ variable "confluent_api_secret" {
   type        = string
   sensitive   = true
 }
+
+variable "sla_webhook_url" {
+  description = "Webhook (Slack/Teams/etc.) para alertas de SLA. Opcional — se vazio, sla_alerts.py só loga o alerta em vez de enviar."
+  type        = string
+  sensitive   = true
+  default     = ""
+}

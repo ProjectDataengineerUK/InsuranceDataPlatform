@@ -18,6 +18,10 @@ def build_producer(bootstrap_servers: str, api_key: str, api_secret: str) -> Pro
             "sasl.mechanisms": "PLAIN",
             "sasl.username": api_key,
             "sasl.password": api_secret,
+            # Client telemetry (KIP-714) hangs against some Confluent Cloud
+            # clusters — the GetTelemetrySubscriptions request times out after
+            # ~6min and tears down the whole connection. Disable it.
+            "enable.metrics.push": False,
         }
     )
 
