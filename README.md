@@ -129,6 +129,21 @@ python scripts/measure_pipeline_latency.py --catalog insurance_dev
 
 Módulo separado do pipeline operacional: simula 3 seguradoras/bancos fictícios (`insurer_a`/`insurer_b`/`insurer_c`, layouts heterogêneos) reportando os mesmos sinistros reais da SUSEP em formatos diferentes, publicando no tópico único `regulatory-claim-report`. O job contínuo `regulatory_bronze_ingest` grava em `bronze.regulatory_claims_raw`; a cada 30 min, `regulatory_pipeline` roda `standardize` → `reconcile` → `gold_export`, produzindo `gold.regulatory_susep_claims` (layout literal SUSEP: `COD_APO`/`D_OCORR`/`INDENIZ`/`REGIAO`/`CAUSA`) e `gold.regulatory_dq_summary`. Não requer nenhum secret novo (reusa `SLA_WEBHOOK_URL`). Detalhes e decisões de design em [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
+### Insurance Visualization Layer (AI/BI Dashboard + Databricks App + Genie, só em prod)
+
+Camada de apresentação sobre o Gold já existente — nenhuma tabela/pipeline novo. Só existe no target `prod` (`resources/visualization.yml`, dentro de `targets.prod.resources`); `dev`/`staging` não ganham nenhum recurso desta feature. Detalhes de design em [`.claude/sdd/features/DESIGN_INSURANCE_VISUALIZATION_LAYER.md`](.claude/sdd/features/DESIGN_INSURANCE_VISUALIZATION_LAYER.md) e decisões duradouras em [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+#### Ativando a camada de visualização (passos manuais, uma vez)
+
+1. `terraform apply` (ambiente prod) cria o SQL Warehouse serverless (`terraform/warehouse.tf`).
+2. `databricks bundle deploy -t prod --var="sql_warehouse_id=$(terraform -chdir=terraform output -raw sql_warehouse_id)"` deploya o Databricks App (`apps/insurance_platform_app/`) — isso minta um service principal dedicado pro app.
+3. Copie o `client_id` desse service principal (Databricks UI → Apps → insurance-platform-app) e rode `terraform apply -var="app_service_principal_id=<client_id>"` (ambiente prod) — concede `SELECT` em `gold`/`monitoring` pra esse principal.
+4. Prototipe o AI/BI Dashboard e o Genie Space interativamente na UI do workspace prod (usando o warehouse do passo 1).
+5. Capture os dois no bundle: `databricks bundle generate dashboard --existing-id <id>` e `databricks bundle generate genie-space --existing-id <id>` — isso adiciona os blocos `dashboards:`/`genie_spaces:` em `resources/visualization.yml` + os arquivos de definição correspondentes.
+6. Commit os arquivos gerados nos passos 4/5 e faça o deploy de novo.
+
+Sem os passos 1–3, o app fica no ar mas as páginas de consulta mostram erro de permissão (degradação esperada, não uma falha silenciosa — ver `apps/insurance_platform_app/pages/status.py`).
+
 ## Estrutura do projeto
 
 Ver [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#estrutura-do-repositório).

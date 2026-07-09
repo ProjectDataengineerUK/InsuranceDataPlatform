@@ -137,6 +137,31 @@ resource "databricks_grants" "gold_checkpoints_read_write" {
   }
 }
 
+// Grant de leitura pro service principal do Databricks App (ver
+// DESIGN_INSURANCE_VISUALIZATION_LAYER.md, Decision 3) — só existe quando
+// var.app_service_principal_id já foi populado (passo 2 do bootstrap) e só
+// em prod (o App só é deployado em prod). Só SELECT — nunca MODIFY/CREATE_TABLE,
+// princípio de menor privilégio.
+resource "databricks_grants" "gold_read_visualization_app" {
+  count  = var.environment == "prod" && var.app_service_principal_id != "" ? 1 : 0
+  schema = "${databricks_catalog.insurance.name}.${databricks_schema.gold.name}"
+
+  grant {
+    principal  = var.app_service_principal_id
+    privileges = ["USE_SCHEMA", "SELECT"]
+  }
+}
+
+resource "databricks_grants" "monitoring_read_visualization_app" {
+  count  = var.environment == "prod" && var.app_service_principal_id != "" ? 1 : 0
+  schema = "${databricks_catalog.insurance.name}.${databricks_schema.monitoring.name}"
+
+  grant {
+    principal  = var.app_service_principal_id
+    privileges = ["USE_SCHEMA", "SELECT"]
+  }
+}
+
 // A tabela `claims` em Gold é criada pelos jobs Spark (saveAsTable), não pelo
 // Terraform — gerenciar o schema da tabela em dois sistemas causaria conflito
 // de ownership. A função de masking e o `ALTER TABLE ... SET MASK` em

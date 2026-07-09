@@ -1,0 +1,7 @@
+command: ["streamlit", "run", "app.py"]
+
+env:
+  - name: WAREHOUSE_ID
+    valueFrom: sql-warehouse
+  - name: LOG_LEVEL
+    value: "info"

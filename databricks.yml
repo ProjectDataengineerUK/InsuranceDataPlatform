@@ -7,6 +7,14 @@ include:
 variables:
   catalog:
     description: Nome do catálogo Unity Catalog do ambiente
+  sql_warehouse_id:
+    description: >-
+      ID do Serverless SQL Warehouse (terraform/warehouse.tf), consumido só pelo
+      app insurance_platform_app em prod (ver resources/visualization.yml).
+      Passado via `--var` no deploy-prod, resolvido a partir de
+      `terraform output -raw sql_warehouse_id` — vazio em dev/staging, onde o
+      app não é deployado.
+    default: ""
 
 # Os arquivos em src/ são sincronizados como Workspace Files pelo próprio DAB
 # (sync automático da raiz do bundle) — não há empacotamento em wheel neste
