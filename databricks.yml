@@ -27,10 +27,17 @@ targets:
 
   staging:
     mode: production
+    workspace:
+      # mode: production exige um root_path explícito (evita depender do
+      # default por-usuário que development usa) — mesmo workspace/PAT do
+      # dev, só muda o catálogo Unity Catalog.
+      root_path: /Workspace/Users/spepebr@gmail.com/.bundle/${bundle.name}/${bundle.target}
     variables:
       catalog: insurance_staging
 
   prod:
     mode: production
+    workspace:
+      root_path: /Workspace/Users/spepebr@gmail.com/.bundle/${bundle.name}/${bundle.target}
     variables:
       catalog: insurance_prod
