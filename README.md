@@ -81,7 +81,6 @@ Ou disparando o workflow manualmente pela aba Actions do GitHub (`workflow_dispa
 | `CONFLUENT_API_KEY` | `deploy.yml`, `producer.yml` | Sim |
 | `CONFLUENT_API_SECRET` | `deploy.yml`, `producer.yml` | Sim |
 | `SLA_WEBHOOK_URL` | `deploy.yml` → secret Databricks `sla-webhook-url`, lido por `sla_alerts.py` e `model_drift.py` | Não — sem ele, os dois só logam o alerta em vez de enviar (comportamento padrão seguro) |
-| `APP_SERVICE_PRINCIPAL_ID` | `deploy.yml` (só prod) → `TF_VAR_app_service_principal_id`, concede `SELECT` em `gold`/`monitoring` pro Databricks App | Não até o app existir — depois de criado (client_id só existe após o primeiro deploy do app), sem esse secret o próximo deploy automático **desfaz** o grant (ver "Ativando a camada de visualização") |
 
 O ambiente `production` do GitHub (usado pelo job `deploy-prod`) pode ter regra de aprovação manual configurada em Settings → Environments — não é obrigatório, mas é o gate natural antes de aplicar em `insurance_prod`.
 
@@ -136,16 +135,13 @@ Camada de apresentação sobre o Gold já existente — nenhuma tabela/pipeline 
 
 #### Ativando a camada de visualização
 
-Os 2 primeiros passos já são automáticos: o job `deploy-prod` do `deploy.yml` roda `terraform apply` (cria o SQL Warehouse serverless, `terraform/warehouse.tf`) e já lê `terraform output -raw sql_warehouse_id` pra passar como `--var` no `databricks bundle deploy -t prod` — nenhuma intervenção manual necessária pra isso a cada push em `main`. Isso deploya o Databricks App (`apps/insurance_platform_app/`), que minta um service principal dedicado.
+Automático a cada push em `main`: o job `deploy-prod` do `deploy.yml` roda `terraform apply` (cria o SQL Warehouse serverless, `terraform/warehouse.tf`) e já lê `terraform output -raw sql_warehouse_id` pra passar como `--var` no `databricks bundle deploy -t prod`, que deploya o Databricks App (`apps/insurance_platform_app/`). O acesso do app às tabelas Gold/monitoring não precisa de um grant Terraform explícito — confirmado num deploy real que o service principal do app já consegue consultar essas tabelas (erros observados foram `TABLE_OR_VIEW_NOT_FOUND`, nunca `PERMISSION_DENIED`).
 
-Passos manuais restantes (uma vez):
+Passos manuais restantes (uma vez, pra Dashboard/Genie):
 
-1. Copie o `client_id` do service principal do app (Databricks UI → Apps → insurance-platform-app) e cadastre como o secret `APP_SERVICE_PRINCIPAL_ID` no GitHub (Settings → Secrets and variables → Actions, ambiente `production`) — **não** rode `terraform apply` manual com essa var direto: como `deploy.yml` roda `terraform apply` a cada push, se o valor não ficar persistido como secret, o próximo deploy automático desfaz o grant (a var volta pra `""` e o `count` do resource cai pra 0). Depois de cadastrar o secret, dispare o `deploy.yml` de novo (push ou re-run) pra aplicar o grant.
-2. Prototipe o AI/BI Dashboard e o Genie Space interativamente na UI do workspace prod (usando o warehouse já criado pelo passo automático acima).
-3. Capture os dois no bundle: `databricks bundle generate dashboard --existing-id <id>` e `databricks bundle generate genie-space --existing-id <id>` — isso adiciona os blocos `dashboards:`/`genie_spaces:` em `resources/visualization.yml` + os arquivos de definição correspondentes.
-4. Commit os arquivos gerados no passo 2/3 e faça push — o próximo deploy automático já inclui os dois.
-
-Sem o passo 1, o app fica no ar mas as páginas de consulta mostram erro de permissão (degradação esperada, não uma falha silenciosa — ver `apps/insurance_platform_app/pages/status.py`).
+1. Prototipe o AI/BI Dashboard e o Genie Space interativamente na UI do workspace prod (usando o warehouse já criado pelo passo automático acima).
+2. Capture os dois no bundle: `databricks bundle generate dashboard --existing-id <id>` e `databricks bundle generate genie-space --existing-id <id>` — isso adiciona os blocos `dashboards:`/`genie_spaces:` em `resources/visualization.yml` + os arquivos de definição correspondentes.
+3. Commit os arquivos gerados e faça push — o próximo deploy automático já inclui os dois.
 
 ## Estrutura do projeto
 

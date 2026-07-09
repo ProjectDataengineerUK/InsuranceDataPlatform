@@ -49,16 +49,3 @@ variable "sla_webhook_url" {
   sensitive   = true
   default     = ""
 }
-
-variable "app_service_principal_id" {
-  description = <<-EOT
-    Client ID do service principal do Databricks App (insurance_platform_app).
-    Vazio até o bootstrap em 2 passos rodar (ver DESIGN_INSURANCE_VISUALIZATION_LAYER.md,
-    Decision 3): 1) `databricks bundle deploy -t prod` cria o app e minta o
-    service principal; 2) o client_id gerado é setado aqui via TF_VAR e um
-    novo `terraform apply` concede os grants de leitura. Não é segredo (é um
-    client ID, não uma credencial), mas só é populado manualmente.
-  EOT
-  type        = string
-  default     = ""
-}

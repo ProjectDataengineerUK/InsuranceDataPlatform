@@ -90,15 +90,6 @@ jobs:
           TF_VAR_confluent_bootstrap_servers: ${{ secrets.CONFLUENT_BOOTSTRAP_SERVERS }}
           TF_VAR_confluent_api_key: ${{ secrets.CONFLUENT_API_KEY }}
           TF_VAR_confluent_api_secret: ${{ secrets.CONFLUENT_API_SECRET }}
-          # Opcional — igual ao padrão já usado pro SLA_WEBHOOK_URL. Sem esse
-          # secret, o grant do service principal do Databricks App
-          # (terraform/unity_catalog.tf::gold_read_visualization_app /
-          # monitoring_read_visualization_app) simplesmente não é criado.
-          # Precisa ser setado UMA VEZ, manualmente, depois do primeiro deploy
-          # do app (client_id só existe depois que o app é criado) — sem isso
-          # persistido aqui, o PRÓXIMO deploy automático desfaria o grant
-          # (var voltaria pra "" e o count do resource cairia pra 0).
-          TF_VAR_app_service_principal_id: ${{ secrets.APP_SERVICE_PRINCIPAL_ID }}
         run: |
           terraform init
           terraform import databricks_catalog.insurance "insurance_${TF_VAR_environment}" || true

@@ -137,39 +137,21 @@ resource "databricks_grants" "gold_checkpoints_read_write" {
   }
 }
 
-// Grant de leitura pro service principal do Databricks App (ver
-// DESIGN_INSURANCE_VISUALIZATION_LAYER.md, Decision 3). databricks_grant
-// (singular, aditivo) — não databricks_grants (plural, autoritativo): já
-// tentamos meter esse grant DENTRO de gold_read_only_analysts via dynamic
-// "grant" e a modificação (Update) desse resource falhou de verdade num
-// apply real com "cannot update grants: permissions ... are [...], but have
-// to be [...]" — um erro de precondição/CAS do provider que parece disparar
-// especificamente em UPDATEs de um databricks_grants já aplicado antes,
-// não em creates novos. gold_read_only_analysts fica intocado (exatamente
-// como já estava aplicado, sem diff nenhum nesta apply) e o grant do app
-// vira um resource separado, só CREATE — o mesmo padrão que já funcionou
-// pra monitoring antes da corrida de concorrência.
-resource "databricks_grant" "gold_read_visualization_app" {
-  count      = var.environment == "prod" && var.app_service_principal_id != "" ? 1 : 0
-  schema     = "${databricks_catalog.insurance.name}.${databricks_schema.gold.name}"
-  principal  = var.app_service_principal_id
-  privileges = ["USE_SCHEMA", "SELECT"]
-}
-
-// monitoring não tem um databricks_grants pré-existente, então um
-// databricks_grant isolado aqui é seguro por si só. depends_on serializa
-// as duas chamadas de grant (gold e monitoring) pra não rodarem em paralelo
-// na mesma apply — evita repetir a corrida já observada quando duas
-// mudanças de grant do MESMO principal em objetos diferentes competiram
-// pela API ao mesmo tempo.
-resource "databricks_grant" "monitoring_read_visualization_app" {
-  count      = var.environment == "prod" && var.app_service_principal_id != "" ? 1 : 0
-  schema     = "${databricks_catalog.insurance.name}.${databricks_schema.monitoring.name}"
-  principal  = var.app_service_principal_id
-  privileges = ["USE_SCHEMA", "SELECT"]
-
-  depends_on = [databricks_grant.gold_read_visualization_app]
-}
+// Grant do service principal do Databricks App pra gold/monitoring:
+// REMOVIDO daqui de propósito (ver DESIGN_INSURANCE_VISUALIZATION_LAYER.md,
+// Decision 3 — nota pós-deploy). 3 tentativas diferentes (databricks_grants
+// com dynamic "grant", databricks_grant separado, e novamente databricks_grant
+// com depends_on) falharam em applies reais contra este schema com
+// variações do mesmo erro "cannot create/update grant: permissions ... are
+// [...], but have to be [...]". Testado empiricamente: o app já consulta
+// gold.regulatory_dq_summary e monitoring._regulatory_reconciliation_results
+// sem erro de permissão (o erro real foi TABLE_OR_VIEW_NOT_FOUND, não
+// PERMISSION_DENIED) — ou seja, o service principal do app já tem acesso por
+// algum mecanismo fora deste Terraform (provavelmente concedido
+// automaticamente pelo próprio Databricks Apps no catálogo/schema onde o
+// app roda). Gerenciar esse grant explicitamente aqui só estava causando
+// falhas de deploy sem necessidade real — reavaliar só se um teste real
+// mostrar PERMISSION_DENIED no futuro.
 
 // A tabela `claims` em Gold é criada pelos jobs Spark (saveAsTable), não pelo
 // Terraform — gerenciar o schema da tabela em dois sistemas causaria conflito
