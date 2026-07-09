@@ -110,3 +110,5 @@ O retrain automático **não** usa `dbutils.jobs.taskValues`/`condition_task` do
 - Volume real dos datasets SUSEP/ANS ainda não validado (ver Assumptions A-001 a A-004 do DEFINE) — recomenda-se um spike antes de dimensionar compute para produção real.
 - Modelo de fraude usa rótulo fraco (heurística) para bootstrap inicial; evoluir para rótulos supervisionados reais é um próximo passo natural.
 - `customer_id` não disponível em nenhuma das duas fontes — qualquer caso de uso que dependa de histórico por cliente (ex: frequência de sinistros do `streaming_score.py`) fica limitado até uma fonte complementar ser identificada.
+- RLS por região (`gold_aggregate.py::apply_governance`, ver seção acima) depende de grupos `insurance-region-<uf>` que ainda não existem na conta — até serem criados (fora do Terraform deste projeto, é administração de conta), só `insurance-data-team` enxerga `gold.claims`.
+- Alertas de SLA/drift (`sla_alerts.py`, `model_drift.py`) só enviam via webhook se o secret opcional `SLA_WEBHOOK_URL` estiver configurado no GitHub (ver README, seção "Secrets necessários") — sem ele, caem no fallback de log, por design.

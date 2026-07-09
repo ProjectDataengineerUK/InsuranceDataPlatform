@@ -71,6 +71,19 @@ Ou disparando o workflow manualmente pela aba Actions do GitHub (`workflow_dispa
 
 ## Deploy
 
+### Secrets necessários no GitHub (Settings → Secrets and variables → Actions)
+
+| Secret | Usado por | Obrigatório? |
+|--------|-----------|--------------|
+| `DATABRICKS_HOST_DEV` | `deploy.yml` (dev e prod — mesmo workspace, ver `docs/ARCHITECTURE.md`) | Sim |
+| `DATABRICKS_TOKEN_DEV` | `deploy.yml` (dev e prod) | Sim |
+| `CONFLUENT_BOOTSTRAP_SERVERS` | `deploy.yml`, `producer.yml` | Sim |
+| `CONFLUENT_API_KEY` | `deploy.yml`, `producer.yml` | Sim |
+| `CONFLUENT_API_SECRET` | `deploy.yml`, `producer.yml` | Sim |
+| `SLA_WEBHOOK_URL` | `deploy.yml` → secret Databricks `sla-webhook-url`, lido por `sla_alerts.py` e `model_drift.py` | Não — sem ele, os dois só logam o alerta em vez de enviar (comportamento padrão seguro) |
+
+O ambiente `production` do GitHub (usado pelo job `deploy-prod`) pode ter regra de aprovação manual configurada em Settings → Environments — não é obrigatório, mas é o gate natural antes de aplicar em `insurance_prod`.
+
 ### Infraestrutura (Terraform)
 
 ```bash
@@ -93,7 +106,10 @@ O CI/CD (`.github/workflows/deploy.yml`) automatiza os dois passos acima para `d
 
 ### Governança
 
-O masking de `customer_id` é aplicado automaticamente: o job `gold_aggregate` (a cada execução, 10 em 10 min) reaplica o `CREATE OR REPLACE FUNCTION` + `ALTER TABLE ... SET MASK` via `apply_governance()` em `src/streaming/gold_aggregate.py`, assim que a tabela `gold.claims` existir. Não há passo manual a rodar após o deploy. `sql/governance_setup.sql` fica só como referência/fallback caso precise ser aplicado manualmente fora do job (ex.: workspace novo, antes do primeiro run).
+O masking de `customer_id` e o row filter por região são aplicados automaticamente: o job `gold_aggregate` (a cada execução, 10 em 10 min) reaplica `CREATE OR REPLACE FUNCTION` + `ALTER TABLE ... SET MASK`/`SET ROW FILTER` via `apply_governance()` em `src/streaming/gold_aggregate.py`, assim que a tabela `gold.claims` existir. Não há passo manual a rodar após o deploy. `sql/governance_setup.sql` fica só como referência/fallback caso precise ser aplicado manualmente fora do job (ex.: workspace novo, antes do primeiro run).
+
+- **Masking:** `customer_id` só aparece em texto claro para o grupo `insurance-data-team`; qualquer outro principal vê o hash SHA-256.
+- **RLS:** linhas de `gold.claims` só são visíveis por inteiro para `insurance-data-team`; um grupo `insurance-region-<uf>` (ainda não provisionado no Terraform) veria só a própria região. Sem esses grupos regionais criados, só `insurance-data-team` enxerga dados — comportamento seguro por padrão, não um bloqueio a corrigir.
 
 ### Validação de latência e volume (AT-001 / AT-003)
 

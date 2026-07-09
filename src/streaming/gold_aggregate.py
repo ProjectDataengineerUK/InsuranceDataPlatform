@@ -37,6 +37,25 @@ ALTER TABLE {catalog}.gold.claims
   SET MASK {catalog}.gold.mask_customer_id
 """
 
+# RLS complementar ao masking acima (DEFINE pedia "RLS/masking em pelo menos
+# uma tabela sensível" — só masking existia). insurance-data-team continua
+# vendo tudo; um analista regional (grupo insurance-region-<uf>, ainda não
+# provisionado no Terraform) só veria sinistros da própria região. Como o
+# grupo regional não existe ainda, is_account_group_member retorna falso e
+# só insurance-data-team enxerga linhas — comportamento seguro por padrão.
+GOVERNANCE_ROW_FILTER_FUNCTION_SQL = """
+CREATE OR REPLACE FUNCTION {catalog}.gold.region_row_filter(region STRING)
+RETURNS BOOLEAN
+RETURN
+  is_account_group_member('insurance-data-team')
+  OR is_account_group_member(concat('insurance-region-', lower(region)))
+"""
+
+GOVERNANCE_APPLY_ROW_FILTER_SQL = """
+ALTER TABLE {catalog}.gold.claims
+  SET ROW FILTER {catalog}.gold.region_row_filter ON (region)
+"""
+
 logger = logging.getLogger(__name__)
 
 
@@ -66,14 +85,17 @@ def _write_gold_partition(
 
 
 def apply_governance(spark: SparkSession, catalog: str, gold_claims_table: str) -> None:
-    """Reaplica o masking de customer_id a cada execução — não depende de um
-    passo manual pós-deploy nem de uma segunda ferramenta de IaC disputando a
-    tabela criada pelos jobs Spark (ver Issue #7 do BUILD_REPORT)."""
+    """Reaplica masking de customer_id + row filter por região a cada
+    execução — não depende de um passo manual pós-deploy nem de uma segunda
+    ferramenta de IaC disputando a tabela criada pelos jobs Spark (ver Issue
+    #7 do BUILD_REPORT)."""
     if not spark.catalog.tableExists(gold_claims_table):
         return
 
     spark.sql(GOVERNANCE_MASK_FUNCTION_SQL.format(catalog=catalog))
     spark.sql(GOVERNANCE_APPLY_MASK_SQL.format(catalog=catalog))
+    spark.sql(GOVERNANCE_ROW_FILTER_FUNCTION_SQL.format(catalog=catalog))
+    spark.sql(GOVERNANCE_APPLY_ROW_FILTER_SQL.format(catalog=catalog))
 
 
 def run_gold_job(

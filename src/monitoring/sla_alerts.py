@@ -1,6 +1,5 @@
 import argparse
 import logging
-import os
 import sys
 from pathlib import Path
 
@@ -16,6 +15,7 @@ import requests
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import col, current_timestamp, lit, unix_timestamp
 
+from src.common.secrets import get_secret
 from src.common.spark_session import get_spark
 
 logger = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ def send_alert(breach_count: int, webhook_url: str | None) -> None:
 
     message = f"{breach_count} sinistro(s) ultrapassaram o SLA e aguardam revisão manual."
     if not webhook_url:
-        logger.warning("SLA_WEBHOOK_URL not set, logging alert instead: %s", message)
+        logger.warning("sla-webhook-url not set, logging alert instead: %s", message)
         return
 
     response = requests.post(webhook_url, json={"text": message}, timeout=10)
@@ -52,7 +52,8 @@ def run_sla_monitor(gold_claims_table: str, sla_hours: int = DEFAULT_SLA_HOURS) 
     breaches_df = find_sla_breaches(gold_claims_df, sla_hours)
     breach_count = breaches_df.count()
 
-    send_alert(breach_count, os.environ.get("SLA_WEBHOOK_URL"))
+    webhook_url = get_secret("insurance-platform", "sla-webhook-url", "SLA_WEBHOOK_URL", required=False)
+    send_alert(breach_count, webhook_url)
     return breach_count
 
 
