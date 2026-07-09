@@ -73,14 +73,23 @@ def _standardize_insurer_b(raw_df: DataFrame) -> DataFrame:
 
 def _standardize_insurer_c(raw_df: DataFrame) -> DataFrame:
     subset = raw_df.filter(col("source_system") == "insurer_c")
+    # occurrenceDate/amountCents chegam como StringType (REGULATORY_CLAIM_RAW_SCHEMA)
+    # a partir de valores originalmente int no producer (epoch millis, cents) —
+    # from_json serializa inteiros grandes em notação científica (ex.:
+    # "1.5895008E12"), que cast("long") direto rejeita como malformado
+    # (confirmado em produção: CAST_INVALID_INPUT). cast("double") primeiro
+    # aceita notação científica; convertendo pra long depois é exato nessas
+    # faixas de valor (bem abaixo do limite de precisão de um double).
     return subset.select(
         col("external_reference_id"),
         col("source_system"),
         col("policyId").alias("policy_id"),
-        from_unixtime(col("occurrenceDate").cast("long") / 1000).cast("timestamp").alias(
-            "event_timestamp"
-        ),
-        (col("amountCents").cast("long") / 100.0).cast(DecimalType(18, 2)).alias("amount"),
+        from_unixtime(col("occurrenceDate").cast("double").cast("long") / 1000)
+        .cast("timestamp")
+        .alias("event_timestamp"),
+        (col("amountCents").cast("double").cast("long") / 100.0)
+        .cast(DecimalType(18, 2))
+        .alias("amount"),
         col("regionCode").alias("region"),
         col("causeCode").cast("int").alias("cause_code"),
     )

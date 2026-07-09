@@ -62,6 +62,11 @@ def test_standardizes_insurer_b_row(spark):
 
 
 def test_standardizes_insurer_c_row(spark):
+    # from_json real (produção) serializa inteiros grandes em StringType usando
+    # notação científica (ex.: "1.5935616E12") — usar essa forma aqui, não
+    # str(epoch_millis) puro, é o que expôs o bug real de CAST_INVALID_INPUT
+    # (cast("long") direto rejeita notação científica; cast("double") primeiro
+    # não).
     epoch_millis = int(datetime(2020, 7, 1).timestamp() * 1000)
     raw_df = spark.createDataFrame(
         [
@@ -69,8 +74,8 @@ def test_standardizes_insurer_c_row(spark):
                 external_reference_id="ref3",
                 source_system="insurer_c",
                 policyId="789",
-                occurrenceDate=str(epoch_millis),
-                amountCents="150000",
+                occurrenceDate=f"{float(epoch_millis):E}",
+                amountCents=f"{150000.0:E}",
                 regionCode="MG",
                 causeCode="9",
             )
