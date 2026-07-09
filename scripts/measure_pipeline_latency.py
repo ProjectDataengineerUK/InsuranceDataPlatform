@@ -28,12 +28,26 @@ import requests
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import avg, col, count, current_timestamp, date_trunc, expr
 from pyspark.sql.functions import max as spark_max
+from pyspark.sql.types import BooleanType, StringType, StructField, StructType
 
 from src.common.delta_write import append_or_create
 from src.common.secrets import get_secret
 from src.common.spark_session import get_spark
 
 logger = logging.getLogger(__name__)
+
+# Schema explícito pro createDataFrame de persist_report — quando o pipeline
+# não tem eventos recentes, nenhum dos 3 relatórios tem chave "within_sla",
+# então a coluna inteira fica None. Spark Connect (ao contrário do Spark
+# clássico) não infere tipo de uma coluna inteiramente nula e falha com
+# CANNOT_DETERMINE_TYPE — schema explícito evita a inferência.
+_REPORT_ROW_SCHEMA = StructType(
+    [
+        StructField("metric_name", StringType(), nullable=False),
+        StructField("details_json", StringType(), nullable=False),
+        StructField("within_sla", BooleanType(), nullable=True),
+    ]
+)
 
 KAFKA_TO_BRONZE_SLA_SECONDS = 120  # AT-001: Kafka -> Bronze < 2 min
 FRAUD_SCORE_SLA_SECONDS = 60  # DEFINE: score de fraude visível em < 1 min
@@ -158,9 +172,9 @@ def persist_report(spark: SparkSession, report: dict, results_table: str) -> Non
         (metric_name, json.dumps(details, default=str), details.get("within_sla"))
         for metric_name, details in report.items()
     ]
-    report_df = spark.createDataFrame(
-        rows, ["metric_name", "details_json", "within_sla"]
-    ).withColumn("_checked_at", current_timestamp())
+    report_df = spark.createDataFrame(rows, schema=_REPORT_ROW_SCHEMA).withColumn(
+        "_checked_at", current_timestamp()
+    )
     append_or_create(report_df, results_table)
 
 
