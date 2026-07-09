@@ -37,6 +37,7 @@ def extract_training_features(gold_claims_table: str) -> pd.DataFrame:
 def train_fraud_model(
     features_df: pd.DataFrame,
     experiment_name: str = "insurance-fraud-detection",
+    registered_model_name: str = "insurance_fraud_classifier",
     random_state: int = 42,
 ) -> str:
     # mlflow tenta descobrir a registry URI lendo spark.conf.get(...) via Spark
@@ -44,7 +45,10 @@ def train_fraud_model(
     # CONFIG_NOT_AVAILABLE. Setar tracking/registry URI explicitamente evita
     # essa resolução automática via sessão Spark.
     mlflow.set_tracking_uri("databricks")
-    mlflow.set_registry_uri("databricks")
+    # O legacy Workspace Model Registry está desabilitado neste workspace —
+    # "databricks-uc" registra no Unity Catalog, que exige um nome de modelo
+    # de 3 níveis (catalog.schema.model), não um nome solto.
+    mlflow.set_registry_uri("databricks-uc")
     mlflow.set_experiment(experiment_name)
 
     x = features_df[FEATURE_COLUMNS]
@@ -69,7 +73,7 @@ def train_fraud_model(
         mlflow.sklearn.log_model(
             model,
             artifact_path="model",
-            registered_model_name="insurance_fraud_classifier",
+            registered_model_name=registered_model_name,
         )
 
         return run.info.run_id
@@ -81,8 +85,11 @@ def main() -> None:
     parser.add_argument("--experiment-name", default="insurance-fraud-detection")
     args = parser.parse_args()
 
+    catalog = args.gold_claims_table.split(".")[0]
+    registered_model_name = f"{catalog}.models.insurance_fraud_classifier"
+
     features_df = extract_training_features(args.gold_claims_table)
-    run_id = train_fraud_model(features_df, args.experiment_name)
+    run_id = train_fraud_model(features_df, args.experiment_name, registered_model_name)
     print(f"trained fraud model, mlflow run_id={run_id}")
 
 

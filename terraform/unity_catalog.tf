@@ -37,6 +37,14 @@ resource "databricks_schema" "monitoring" {
   comment      = "Resultados de qualidade de dados (_dq_results) e observabilidade"
 }
 
+resource "databricks_schema" "models" {
+  # O workspace tem o legacy Workspace Model Registry desabilitado — modelos
+  # mlflow precisam ser registrados no Unity Catalog (nome de 3 níveis).
+  catalog_name = databricks_catalog.insurance.name
+  name         = "models"
+  comment      = "Modelos mlflow registrados no Unity Catalog (ex.: fraud_classifier)"
+}
+
 resource "databricks_grants" "bronze_read_write" {
   schema = "${databricks_catalog.insurance.name}.${databricks_schema.bronze.name}"
 
@@ -52,6 +60,15 @@ resource "databricks_grants" "silver_read_write" {
   grant {
     principal  = var.catalog_owner
     privileges = ["USE_SCHEMA", "CREATE_TABLE", "SELECT", "MODIFY"]
+  }
+}
+
+resource "databricks_grants" "models_read_write" {
+  schema = "${databricks_catalog.insurance.name}.${databricks_schema.models.name}"
+
+  grant {
+    principal  = var.catalog_owner
+    privileges = ["USE_SCHEMA", "CREATE_MODEL", "EXECUTE"]
   }
 }
 
