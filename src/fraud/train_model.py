@@ -13,7 +13,6 @@ sys.path.insert(0, str(Path(_this_file).resolve().parents[2]))
 import mlflow
 import pandas as pd
 from mlflow import MlflowClient
-from mlflow.exceptions import MlflowException
 from mlflow.models import infer_signature
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import current_timestamp
@@ -66,27 +65,29 @@ def should_promote(new_f1: float, champion_f1: float | None) -> bool:
     return champion_f1 is None or new_f1 > champion_f1
 
 
-def get_champion_f1(client: MlflowClient, registered_model_name: str) -> float | None:
-    try:
-        champion_mv = client.get_model_version_by_alias(registered_model_name, "champion")
-    except MlflowException as exc:
-        if exc.error_code != "RESOURCE_DOES_NOT_EXIST":
-            raise
-        return None
-    return client.get_run(champion_mv.run_id).data.metrics.get("f1")
+def get_champion_run(
+    client: MlflowClient, experiment_id: str
+) -> tuple[str | None, float | None]:
+    champion_runs = client.search_runs(
+        experiment_ids=[experiment_id],
+        filter_string="tags.model_stage = 'champion'",
+        max_results=1,
+    )
+    if not champion_runs:
+        return None, None
+    champion_run = champion_runs[0]
+    return champion_run.info.run_id, champion_run.data.metrics.get("f1")
 
 
 def write_feature_baseline(
     x_train: pd.DataFrame,
-    registered_model_name: str,
-    model_version: str,
+    run_id: str,
     baseline_table: str,
 ) -> None:
     stats = x_train.agg(["mean", "std"])
     rows = [
         (
-            registered_model_name,
-            model_version,
+            run_id,
             feature,
             float(stats.loc["mean", feature]),
             float(stats.loc["std", feature]),
@@ -95,7 +96,7 @@ def write_feature_baseline(
     ]
     spark = get_spark("fraud-train-baseline")
     baseline_df = spark.createDataFrame(
-        rows, ["model_name", "model_version", "feature_name", "mean", "stddev"]
+        rows, ["champion_run_id", "feature_name", "mean", "stddev"]
     ).withColumn("_computed_at", current_timestamp())
     # Baseline é um snapshot pequeno (uma linha por feature) do champion atual
     # — substitui a tabela inteira a cada promoção, sem manter histórico.
@@ -107,19 +108,14 @@ def write_feature_baseline(
 def train_fraud_model(
     features_df: pd.DataFrame,
     experiment_name: str,
-    registered_model_name: str,
     baseline_table: str,
     random_state: int = 42,
 ) -> dict:
     # mlflow tenta descobrir a registry URI lendo spark.conf.get(...) via Spark
     # Connect (compute serverless), que rejeita esse config específico com
-    # CONFIG_NOT_AVAILABLE. Setar tracking/registry URI explicitamente evita
-    # essa resolução automática via sessão Spark.
+    # CONFIG_NOT_AVAILABLE. Setar tracking URI explicitamente evita essa
+    # resolução automática via sessão Spark.
     mlflow.set_tracking_uri("databricks")
-    # O legacy Workspace Model Registry está desabilitado neste workspace —
-    # "databricks-uc" registra no Unity Catalog, que exige um nome de modelo
-    # de 3 níveis (catalog.schema.model), não um nome solto.
-    mlflow.set_registry_uri("databricks-uc")
     mlflow.set_experiment(experiment_name)
 
     x = features_df[FEATURE_COLUMNS]
@@ -143,46 +139,36 @@ def train_fraud_model(
 
         mlflow.log_params({"n_estimators": 100, "max_depth": 6})
         mlflow.log_metrics(metrics)
-        # Unity Catalog exige assinatura de input/output no modelo (o legacy
-        # Workspace Model Registry aceitava sem, só com um aviso).
         signature = infer_signature(x_test, predictions)
+        # Sem registered_model_name: registrar no Unity Catalog Model Registry
+        # bate num explicit deny na bucket policy do S3 que hospeda o storage
+        # do UC (AccessDenied em .../models/.../versions/...) — infraestrutura
+        # fora do nosso controle (não é grant de Unity Catalog, é bucket
+        # policy da conta AWS/Databricks; precisa de admin pra corrigir). O
+        # modelo continua totalmente logado e carregável via
+        # runs:/<run_id>/model; "champion" é rastreado por tag na run do
+        # MLflow em vez de alias no Model Registry.
         mlflow.sklearn.log_model(
             model,
             artifact_path="model",
-            registered_model_name=registered_model_name,
             signature=signature,
             input_example=x_test.iloc[:5],
         )
 
-        # search_model_versions em vez de ModelInfo.registered_model_version —
-        # esse atributo nem sempre existe entre versões do mlflow; a busca
-        # filtrada por run_id é determinística e sempre retorna exatamente a
-        # versão recém-criada por este run.
-        versions = client.search_model_versions(
-            f"name='{registered_model_name}' and run_id='{run.info.run_id}'"
-        )
-        new_version = versions[0].version
-
-        champion_f1 = get_champion_f1(client, registered_model_name)
+        champion_run_id, champion_f1 = get_champion_run(client, run.info.experiment_id)
         promoted = should_promote(metrics["f1"], champion_f1)
 
-        client.set_model_version_tag(
-            registered_model_name, new_version, "eval_f1", str(metrics["f1"])
-        )
+        mlflow.set_tag("eval_f1", metrics["f1"])
         if promoted:
-            client.set_registered_model_alias(registered_model_name, "champion", new_version)
-            client.set_model_version_tag(
-                registered_model_name, new_version, "training_outcome", "promoted"
-            )
-            write_feature_baseline(x_train, registered_model_name, new_version, baseline_table)
+            if champion_run_id:
+                client.set_tag(champion_run_id, "model_stage", "superseded")
+            mlflow.set_tag("model_stage", "champion")
+            write_feature_baseline(x_train, run.info.run_id, baseline_table)
         else:
-            client.set_model_version_tag(
-                registered_model_name, new_version, "training_outcome", "rejected"
-            )
+            mlflow.set_tag("model_stage", "rejected")
 
         return {
             "run_id": run.info.run_id,
-            "version": new_version,
             "f1": metrics["f1"],
             "champion_f1": champion_f1,
             "promoted": promoted,
@@ -199,7 +185,6 @@ def main() -> None:
     args = parser.parse_args()
 
     catalog = args.gold_claims_table.split(".")[0]
-    registered_model_name = f"{catalog}.models.insurance_fraud_classifier"
     baseline_table = args.feature_baseline_table or f"{catalog}.monitoring._feature_baseline"
     drift_results_table = args.drift_results_table or f"{catalog}.monitoring._model_drift_results"
 
@@ -215,11 +200,9 @@ def main() -> None:
         return
 
     features_df = extract_training_features(args.gold_claims_table)
-    result = train_fraud_model(
-        features_df, args.experiment_name, registered_model_name, baseline_table
-    )
+    result = train_fraud_model(features_df, args.experiment_name, baseline_table)
     print(
-        f"trained fraud model v{result['version']} run_id={result['run_id']} "
+        f"trained fraud model run_id={result['run_id']} "
         f"f1={result['f1']:.4f} champion_f1={result['champion_f1']} promoted={result['promoted']}"
     )
 
