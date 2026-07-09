@@ -1,0 +1,31 @@
+resources:
+  jobs:
+    regulatory_bronze_ingest:
+      name: insurance-regulatory-bronze-ingest-${bundle.target}
+      continuous:
+        pause_status: UNPAUSED
+      max_concurrent_runs: 1
+
+      # Tópico único regulatory-claim-report compartilhado pelas 3 fontes
+      # fictícias (insurer_a/b/c) — só a chave de junção (external_reference_id)
+      # é obrigatória aqui; validação de negócio de verdade acontece na Silver
+      # (ver src/regulatory/standardize.py).
+      tasks:
+        - task_key: bronze_regulatory_claims
+          environment_key: default
+          spark_python_task:
+            python_file: ../src/streaming/bronze_ingest.py
+            parameters:
+              - "--topic"
+              - "regulatory-claim-report"
+              - "--bronze-table"
+              - "${var.catalog}.bronze.regulatory_claims_raw"
+              - "--checkpoint-path"
+              - "/Volumes/${var.catalog}/bronze/_checkpoints/regulatory-claim-report"
+              - "--required-fields"
+              - "external_reference_id"
+
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "2"

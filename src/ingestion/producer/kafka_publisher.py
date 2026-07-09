@@ -63,7 +63,12 @@ def publish_events(
                 producer.flush()
                 return
 
-            key = str(event.get("claim_id") or event.get("policy_id") or event.get("customer_id"))
+            key = str(
+                event.get("claim_id")
+                or event.get("policy_id")
+                or event.get("customer_id")
+                or event.get("external_reference_id")
+            )
             payload = json.dumps(event, default=str).encode("utf-8")
             producer.produce(
                 topic=topic,

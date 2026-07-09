@@ -7,6 +7,11 @@ import yaml
 
 from src.ingestion.producer.datasets.ans_loader import load_policy_events
 from src.ingestion.producer.datasets.base_loader import download_csv
+from src.ingestion.producer.datasets.regulatory_feeds import (
+    load_insurer_a_events,
+    load_insurer_b_events,
+    load_insurer_c_events,
+)
 from src.ingestion.producer.datasets.susep_loader import load_claim_events
 from src.ingestion.producer.kafka_publisher import build_producer, publish_events
 
@@ -18,6 +23,9 @@ CONFIG_PATH = Path(__file__).parent / "config.yaml"
 SOURCE_LOADERS = {
     "susep": load_claim_events,
     "ans": load_policy_events,
+    "insurer_a": load_insurer_a_events,
+    "insurer_b": load_insurer_b_events,
+    "insurer_c": load_insurer_c_events,
 }
 
 

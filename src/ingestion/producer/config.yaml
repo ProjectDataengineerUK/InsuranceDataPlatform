@@ -7,6 +7,7 @@ topics:
   claim_opened: "claim-opened"
   policy_created: "policy-created"
   customer_updated: "customer-updated"
+  regulatory_claim_report: "regulatory-claim-report"
 
 sources:
   susep:
@@ -31,6 +32,28 @@ sources:
     enabled: false  # fast-follow — depende de credenciamento no sandbox Open Insurance Brasil
     dataset_path: "data/open_insurance.json"
     event_topic: "customer_updated"
+  insurer_a:
+    enabled: true
+    # 3 fontes fictícias (Insurance Regulatory Data Platform) derivadas do
+    # MESMO sinistro real SUSEP (mesmo dataset_url/dataset_path/sample_rows
+    # do source susep) — ver src/ingestion/producer/datasets/regulatory_feeds.py
+    # pra por quê isso produz um subconjunto idêntico entre as 3 fontes.
+    dataset_url: "https://dadosabertos.susep.gov.br/dadosabertos/auto_apos_2006/S_AUTO_2020B.zip"
+    dataset_path: "data/susep_sinistros.csv"
+    event_topic: "regulatory_claim_report"
+    sample_rows: 300
+  insurer_b:
+    enabled: true
+    dataset_url: "https://dadosabertos.susep.gov.br/dadosabertos/auto_apos_2006/S_AUTO_2020B.zip"
+    dataset_path: "data/susep_sinistros.csv"
+    event_topic: "regulatory_claim_report"
+    sample_rows: 300
+  insurer_c:
+    enabled: true
+    dataset_url: "https://dadosabertos.susep.gov.br/dadosabertos/auto_apos_2006/S_AUTO_2020B.zip"
+    dataset_path: "data/susep_sinistros.csv"
+    event_topic: "regulatory_claim_report"
+    sample_rows: 300
 
 replay:
   events_per_minute: 100

@@ -18,7 +18,7 @@ from src.common.kafka_config import get_kafka_options
 from src.common.schemas import SCHEMA_REGISTRY
 from src.common.spark_session import get_spark
 
-REQUIRED_FIELDS = ["event_type", "event_timestamp"]
+DEFAULT_REQUIRED_FIELDS = ["event_type", "event_timestamp"]
 
 
 def _parse_events(raw_stream: DataFrame, schema) -> DataFrame:
@@ -30,15 +30,17 @@ def _parse_events(raw_stream: DataFrame, schema) -> DataFrame:
     ).withColumn("_ingested_at", current_timestamp())
 
 
-def _is_malformed(parsed_df: DataFrame) -> DataFrame:
+def _is_malformed(parsed_df: DataFrame, required_fields: list[str]) -> DataFrame:
     condition = col("payload").isNull()
-    for field in REQUIRED_FIELDS:
+    for field in required_fields:
         condition = condition | col(f"payload.{field}").isNull()
     return condition
 
 
-def _write_batch(batch_df: DataFrame, batch_id: int, bronze_table: str) -> None:
-    malformed = _is_malformed(batch_df)
+def _write_batch(
+    batch_df: DataFrame, batch_id: int, bronze_table: str, required_fields: list[str]
+) -> None:
+    malformed = _is_malformed(batch_df, required_fields)
 
     valid_df = (
         batch_df.filter(~malformed)
@@ -70,19 +72,29 @@ def _write_batch(batch_df: DataFrame, batch_id: int, bronze_table: str) -> None:
         )
 
 
-def run_bronze_ingest(topic: str, bronze_table: str, checkpoint_path: str) -> StreamingQuery:
+def run_bronze_ingest(
+    topic: str,
+    bronze_table: str,
+    checkpoint_path: str,
+    required_fields: list[str] | None = None,
+) -> StreamingQuery:
     if topic not in SCHEMA_REGISTRY:
         raise ValueError(f"no schema registered for topic '{topic}'")
 
     spark = get_spark(f"bronze-ingest-{topic}")
     schema = SCHEMA_REGISTRY[topic]
+    effective_required_fields = (
+        DEFAULT_REQUIRED_FIELDS if required_fields is None else required_fields
+    )
 
     raw_stream = spark.readStream.format("kafka").options(**get_kafka_options(topic)).load()
     parsed_stream = _parse_events(raw_stream, schema)
 
     return (
         parsed_stream.writeStream.foreachBatch(
-            lambda batch_df, batch_id: _write_batch(batch_df, batch_id, bronze_table)
+            lambda batch_df, batch_id: _write_batch(
+                batch_df, batch_id, bronze_table, effective_required_fields
+            )
         )
         .option("checkpointLocation", checkpoint_path)
         # Compute serverless (obrigatório neste workspace) não suporta trigger
@@ -100,9 +112,25 @@ def main() -> None:
     parser.add_argument("--topic", required=True)
     parser.add_argument("--bronze-table", required=True)
     parser.add_argument("--checkpoint-path", required=True)
+    parser.add_argument(
+        "--required-fields",
+        default=None,
+        help="Campos obrigatórios (separados por vírgula) pra considerar um registro "
+        "válido no Bronze — default: event_type,event_timestamp (eventos operacionais). "
+        "Tópicos com layout raw/heterogêneo (ex.: regulatory-claim-report) devem passar "
+        "só a chave de junção compartilhada (ex.: external_reference_id), já que a "
+        "validação de negócio de verdade acontece na Silver, não aqui.",
+    )
     args = parser.parse_args()
 
-    query = run_bronze_ingest(args.topic, args.bronze_table, args.checkpoint_path)
+    required_fields = (
+        [field.strip() for field in args.required_fields.split(",")]
+        if args.required_fields
+        else None
+    )
+    query = run_bronze_ingest(
+        args.topic, args.bronze_table, args.checkpoint_path, required_fields
+    )
     query.awaitTermination()
 
 

@@ -41,6 +41,16 @@ def check_range(
     return DQResult(f"range:{column}", table_name, failed == 0, failed)
 
 
+def check_allowed_values(
+    df: DataFrame,
+    column: str,
+    allowed_values: set,
+    table_name: str,
+) -> DQResult:
+    failed = df.filter(~col(column).isin(list(allowed_values))).count()
+    return DQResult(f"allowed_values:{column}", table_name, failed == 0, failed)
+
+
 def check_freshness(
     df: DataFrame,
     timestamp_column: str,

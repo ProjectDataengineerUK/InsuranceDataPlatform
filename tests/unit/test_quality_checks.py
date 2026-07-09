@@ -1,4 +1,4 @@
-from src.quality.checks import check_not_null, check_range, check_unique
+from src.quality.checks import check_allowed_values, check_not_null, check_range, check_unique
 
 
 def test_check_not_null_detects_nulls(spark):
@@ -44,3 +44,21 @@ def test_check_range_detects_out_of_range_values(spark):
 
     assert result.passed is False
     assert result.failed_rows == 2
+
+
+def test_check_allowed_values_detects_out_of_allowlist(spark):
+    df = spark.createDataFrame([("SP",), ("RJ",), ("ZZ",)], ["region"])
+
+    result = check_allowed_values(df, "region", {"SP", "RJ"}, "silver.regulatory_claims")
+
+    assert result.passed is False
+    assert result.failed_rows == 1
+
+
+def test_check_allowed_values_passes_when_all_allowed(spark):
+    df = spark.createDataFrame([("SP",), ("RJ",)], ["region"])
+
+    result = check_allowed_values(df, "region", {"SP", "RJ"}, "silver.regulatory_claims")
+
+    assert result.passed is True
+    assert result.failed_rows == 0

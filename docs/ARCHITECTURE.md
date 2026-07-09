@@ -53,7 +53,8 @@ Plataforma de dados de seguros 100% Databricks: ingestão de dados públicos rea
 │   ├── streaming/       # jobs Bronze, Silver, Gold
 │   ├── quality/         # framework de qualidade de dados (sem DLT)
 │   ├── fraud/           # score de fraude (streaming) + treino do modelo (MLflow, com gate champion/challenger)
-│   └── monitoring/      # alertas de SLA + monitor de drift de features do modelo
+│   ├── monitoring/      # alertas de SLA + monitor de drift de features do modelo
+│   └── regulatory/      # standardize → reconcile → gold export do fluxo regulatório SUSEP (batch)
 ├── terraform/           # Unity Catalog, secrets (IaC que muda raramente)
 ├── resources/            # Jobs/Workflows via Databricks Asset Bundles
 ├── databricks.yml        # root do bundle (targets dev/staging/prod)
@@ -111,6 +112,22 @@ O retrain automático **não** usa `dbutils.jobs.taskValues`/`condition_task` do
 
 `scripts/measure_pipeline_latency.py` (que media AT-001/AT-003 mas nunca tinha rodado de verdade — inclusive tinha o mesmo bug de `.rdd.isEmpty()` já corrigido em outros 4 lugares nesta sessão, nunca pego porque nunca executou) agora roda como job agendado (`resources/jobs.pipeline_monitoring.yml`, a cada 15 min, alinhado à `--window-minutes` default), persiste cada checagem em `monitoring._pipeline_latency_results` e alerta via o mesmo secret `sla-webhook-url` quando alguma latência sai do SLA — mesmo padrão de `sla_alerts.py`/`model_drift.py`.
 
+## Insurance Regulatory Data Platform — MVP do fluxo regulatório SUSEP (2026-07-09)
+
+Módulo novo, deliberadamente separado do pipeline operacional (Kafka → Bronze → Silver → Gold de sinistros/apólices): modela o fluxo pelo qual seguradoras/bancos **padronizam, reconciliam e preparam** dados de sinistros antes do reporte à SUSEP — não o fluxo de contratação/emissão de apólice em si. `src/regulatory/` é um novo pacote de topo (irmão de `src/fraud/`, `src/streaming/`), já que representa um domínio de negócio distinto com sua própria sequência de estágios (standardize → reconcile → gold export), rodando em batch (`spark.read.table`, sem streaming/checkpoint) a cada 30 min via `resources/jobs.regulatory_pipeline.yml`, depois do job contínuo `regulatory_bronze_ingest`.
+
+**Simulação sintética honesta:** não existe dataset público na granularidade "cru, pré-padronização, por seguradora" — a própria SUSEP só publica o resultado já padronizado (`S_AUTO`, já usado como fonte real em `susep_loader.py`). `src/ingestion/producer/datasets/regulatory_feeds.py` gera 3 fontes fictícias (`insurer_a`/`insurer_b`/`insurer_c`, layouts deliberadamente heterogêneos: snake_case PT-BR, UPPER_SNAKE, camelCase) a partir do **mesmo subconjunto de sinistros reais da SUSEP** (mesmo `dataset_path`/`sample_rows`/`random_seed=42` do source `susep` → `df.sample()` determinístico garante que as 3 fontes derivem do mesmo sample sem nenhuma coordenação extra). A premissa "múltiplas seguradoras reportando o mesmo sinistro" é uma simplificação intencional só para exercitar a lógica de reconciliação — na vida real, um sinistro de auto tem uma única seguradora de registro; não é uma alegação sobre sobreposição real entre seguradoras.
+
+**Bronze com `required_fields` parametrizável:** `bronze_ingest.py::run_bronze_ingest`/`_is_malformed` ganharam um parâmetro opcional `required_fields: list[str] | None` (default preserva o comportamento antigo hardcoded pros 3 tópicos operacionais). O tópico único `regulatory-claim-report` (compartilhado pelas 3 fontes fictícias) passa `--required-fields external_reference_id` — Bronze só quarentena um registro se o JSON for inválido ou a própria chave de junção estiver ausente; qualquer outro defeito de negócio (data/valor ausente, código inválido) passa de propósito, porque capturar isso é o trabalho da Silver (`check_allowed_values`, `check_not_null` em `standardize.py`), não do Bronze.
+
+**Reconciliação (`src/regulatory/reconcile.py`):** por `external_reference_id`, `amount_mismatch` quando o spread entre valores reportados excede `max(min_amount * 2%, R$ 5,00)`; `missing_in_source` quando uma fonte "ativa" (com relatos em algum lugar do batch) não aparece pra aquele sinistro. Resolução de conflito = **mediana** dos valores reportados — decisão de MVP documentada (robusta a uma única fonte discrepante, determinística, sem viés de "escolher uma seguradora"), não o que um processo regulatório real faria.
+
+**Allow-list de região sem tabela oficial:** nenhuma tabela de códigos de região SUSEP foi confirmada neste repo (mesma limitação já documentada acima pro `susep_loader.py`). `standardize.py::_region_allowlist` usa um proxy data-driven: um valor de região só entra no allow-list se pelo menos 2 das (até 3) fontes concordarem nele pro mesmo `external_reference_id` — nenhum valor é hardcoded, incluindo o sentinel `"ZZ"` que `regulatory_feeds.py` usa pra simular código inválido.
+
+**Sem masking/RLS novo:** este módulo não introduz nenhum campo com forma de identificador pessoal (CPF/CNPJ) — `external_reference_id` é um hash sintético, `source_system` é um rótulo de seguradora/banco, não dado pessoal. Consistente com a limitação já documentada de que nem SUSEP nem ANS expõem `customer_id` reutilizável.
+
+**Fora de escopo neste slice:** exportação de arquivo plano (CSV) para um UC Volume — as colunas/tipos/ordem de `gold.regulatory_susep_claims` (`COD_APO`, `D_OCORR`, `INDENIZ`, `REGIAO`, `CAUSA`, literalmente os 5 campos já confirmados no layout oficial via `susep_loader.py`) já bastam para verificar fidelidade estrutural contra o SUSEP real, sem precisar de um novo UC Volume/grant Terraform. `gold.regulatory_dq_summary` é cumulativo (soma tudo desde sempre, sem conceito de `run_id`) — sumarização "por execução" de verdade é fast-follow.
+
 ## Limitações conhecidas / roadmap
 
 - Open Insurance Brasil como fonte de dados: pendente de credenciamento no diretório sandbox.
@@ -118,5 +135,6 @@ O retrain automático **não** usa `dbutils.jobs.taskValues`/`condition_task` do
 - Volume real dos datasets SUSEP/ANS ainda não validado (ver Assumptions A-001 a A-004 do DEFINE) — recomenda-se um spike antes de dimensionar compute para produção real.
 - Modelo de fraude usa rótulo fraco (heurística) para bootstrap inicial; evoluir para rótulos supervisionados reais é um próximo passo natural.
 - `customer_id` não disponível em nenhuma das duas fontes — qualquer caso de uso que dependa de histórico por cliente (ex: frequência de sinistros do `streaming_score.py`) fica limitado até uma fonte complementar ser identificada.
+- Insurance Regulatory Data Platform: exportação de arquivo plano (CSV) pra UC Volume ainda não implementada; `gold.regulatory_dq_summary` é cumulativo, sem `run_id` por execução; nenhum dashboard/BI foi criado sobre as tabelas gold deste módulo ainda.
 - RLS por região (`gold_aggregate.py::apply_governance`, ver seção acima) depende de grupos `insurance-region-<uf>` que ainda não existem na conta — até serem criados (fora do Terraform deste projeto, é administração de conta), só `insurance-data-team` enxerga `gold.claims`.
 - Alertas de SLA/drift (`sla_alerts.py`, `model_drift.py`) só enviam via webhook se o secret opcional `SLA_WEBHOOK_URL` estiver configurado no GitHub (ver README, seção "Secrets necessários") — sem ele, caem no fallback de log, por design.

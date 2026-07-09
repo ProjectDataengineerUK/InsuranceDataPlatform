@@ -125,6 +125,10 @@ python scripts/measure_pipeline_latency.py --catalog insurance_dev
 
 `fraud_score_stream` escreve `model_fraud_score` em `gold.claims` — o score do modelo campeão (mlflow) calculado em paralelo à heurística, só para observabilidade/comparação. A decisão real (`fraud_flag`/`auto_approved`) continua vindo 100% da heurística de `streaming_score.py`; ver `docs/ARCHITECTURE.md` para o porquê (rótulo fraco, vazamento de rótulo) e os limites desse modo (modelo só recarrega no restart do job, não em tempo real a cada promoção).
 
+### Insurance Regulatory Data Platform (fluxo regulatório SUSEP)
+
+Módulo separado do pipeline operacional: simula 3 seguradoras/bancos fictícios (`insurer_a`/`insurer_b`/`insurer_c`, layouts heterogêneos) reportando os mesmos sinistros reais da SUSEP em formatos diferentes, publicando no tópico único `regulatory-claim-report`. O job contínuo `regulatory_bronze_ingest` grava em `bronze.regulatory_claims_raw`; a cada 30 min, `regulatory_pipeline` roda `standardize` → `reconcile` → `gold_export`, produzindo `gold.regulatory_susep_claims` (layout literal SUSEP: `COD_APO`/`D_OCORR`/`INDENIZ`/`REGIAO`/`CAUSA`) e `gold.regulatory_dq_summary`. Não requer nenhum secret novo (reusa `SLA_WEBHOOK_URL`). Detalhes e decisões de design em [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
 ## Estrutura do projeto
 
 Ver [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#estrutura-do-repositório).
