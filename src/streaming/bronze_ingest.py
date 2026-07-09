@@ -1,4 +1,11 @@
 import argparse
+import sys
+from pathlib import Path
+
+# Job roda como spark_python_task via workspace files (sem empacotamento em
+# wheel) — Databricks só põe o diretório do próprio script no sys.path, não a
+# raiz do bundle. Sem isso, "from src..." abaixo falha com ModuleNotFoundError.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import col, current_timestamp, from_json, lit
