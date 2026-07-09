@@ -64,6 +64,62 @@ resource "databricks_grants" "gold_read_only_analysts" {
   }
 }
 
+// Volumes gerenciados para checkpoint do Structured Streaming — os jobs
+// referenciam /Volumes/${var.catalog}/<schema>/_checkpoints/<nome> (ver
+// resources/jobs.bronze.yml, jobs.silver.yml, jobs.fraud_score.yml). Um UC
+// Volume não é criado implicitamente na primeira escrita como um diretório
+// DBFS seria — sem isso o job falha com UC_VOLUME_NOT_FOUND.
+resource "databricks_volume" "bronze_checkpoints" {
+  catalog_name = databricks_catalog.insurance.name
+  schema_name  = databricks_schema.bronze.name
+  name         = "_checkpoints"
+  volume_type  = "MANAGED"
+  comment      = "Checkpoints do Structured Streaming de bronze_ingest (um subdiretório por tópico)"
+}
+
+resource "databricks_volume" "silver_checkpoints" {
+  catalog_name = databricks_catalog.insurance.name
+  schema_name  = databricks_schema.silver.name
+  name         = "_checkpoints"
+  volume_type  = "MANAGED"
+  comment      = "Checkpoints do Structured Streaming de silver_transform (um subdiretório por tabela)"
+}
+
+resource "databricks_volume" "gold_checkpoints" {
+  catalog_name = databricks_catalog.insurance.name
+  schema_name  = databricks_schema.gold.name
+  name         = "_checkpoints"
+  volume_type  = "MANAGED"
+  comment      = "Checkpoints do Structured Streaming de fraud_score_stream"
+}
+
+resource "databricks_grants" "bronze_checkpoints_read_write" {
+  volume = "${databricks_catalog.insurance.name}.${databricks_schema.bronze.name}.${databricks_volume.bronze_checkpoints.name}"
+
+  grant {
+    principal  = var.catalog_owner
+    privileges = ["READ_VOLUME", "WRITE_VOLUME"]
+  }
+}
+
+resource "databricks_grants" "silver_checkpoints_read_write" {
+  volume = "${databricks_catalog.insurance.name}.${databricks_schema.silver.name}.${databricks_volume.silver_checkpoints.name}"
+
+  grant {
+    principal  = var.catalog_owner
+    privileges = ["READ_VOLUME", "WRITE_VOLUME"]
+  }
+}
+
+resource "databricks_grants" "gold_checkpoints_read_write" {
+  volume = "${databricks_catalog.insurance.name}.${databricks_schema.gold.name}.${databricks_volume.gold_checkpoints.name}"
+
+  grant {
+    principal  = var.catalog_owner
+    privileges = ["READ_VOLUME", "WRITE_VOLUME"]
+  }
+}
+
 // A tabela `claims` em Gold é criada pelos jobs Spark (saveAsTable), não pelo
 // Terraform — gerenciar o schema da tabela em dois sistemas causaria conflito
 // de ownership. A função de masking e o `ALTER TABLE ... SET MASK` em
