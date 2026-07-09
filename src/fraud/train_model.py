@@ -39,6 +39,12 @@ def train_fraud_model(
     experiment_name: str = "insurance-fraud-detection",
     random_state: int = 42,
 ) -> str:
+    # mlflow tenta descobrir a registry URI lendo spark.conf.get(...) via Spark
+    # Connect (compute serverless), que rejeita esse config específico com
+    # CONFIG_NOT_AVAILABLE. Setar tracking/registry URI explicitamente evita
+    # essa resolução automática via sessão Spark.
+    mlflow.set_tracking_uri("databricks")
+    mlflow.set_registry_uri("databricks")
     mlflow.set_experiment(experiment_name)
 
     x = features_df[FEATURE_COLUMNS]
