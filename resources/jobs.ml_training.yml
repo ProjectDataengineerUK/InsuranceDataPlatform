@@ -17,7 +17,11 @@ resources:
               - "--gold-claims-table"
               - "${var.catalog}.gold.claims"
               - "--experiment-name"
-              - "insurance-fraud-detection-${bundle.target}"
+              # mlflow.set_experiment() com tracking_uri="databricks" exige um
+              # caminho absoluto no workspace — um nome solto (ex.:
+              # "insurance-fraud-detection-dev") é rejeitado pela API com
+              # INVALID_PARAMETER_VALUE.
+              - "/Users/${workspace.current_user.userName}/insurance-fraud-detection-${bundle.target}"
 
       environments:
         - environment_key: default
