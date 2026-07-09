@@ -3,5 +3,11 @@ command: ["streamlit", "run", "app.py"]
 env:
   - name: WAREHOUSE_ID
     valueFrom: sql-warehouse
+  - name: CATALOG
+    # Este app só é deployado em prod (ver resources/visualization.yml,
+    # targets.prod.resources) — sem templating de ${var.catalog} aqui porque
+    # app.yaml é um manifesto nativo do Databricks Apps, não processado pelo
+    # engine de variáveis do bundle.
+    value: "insurance_prod"
   - name: LOG_LEVEL
     value: "info"

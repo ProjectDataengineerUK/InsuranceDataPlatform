@@ -142,24 +142,27 @@ resource "databricks_grants" "gold_checkpoints_read_write" {
 // var.app_service_principal_id já foi populado (passo 2 do bootstrap) e só
 // em prod (o App só é deployado em prod). Só SELECT — nunca MODIFY/CREATE_TABLE,
 // princípio de menor privilégio.
-resource "databricks_grants" "gold_read_visualization_app" {
-  count  = var.environment == "prod" && var.app_service_principal_id != "" ? 1 : 0
-  schema = "${databricks_catalog.insurance.name}.${databricks_schema.gold.name}"
-
-  grant {
-    principal  = var.app_service_principal_id
-    privileges = ["USE_SCHEMA", "SELECT"]
-  }
+//
+// databricks_grant (singular, aditivo) — não databricks_grants (plural,
+// autoritativo por objeto): o schema gold já tem um databricks_grants
+// existente (gold_read_only_analysts, acima) gerenciando a lista completa de
+// grants daquele securable. Um segundo databricks_grants no MESMO schema
+// entraria em conflito (cada um veria o grant do outro como drift a
+// reverter), arriscando derrubar o acesso do catalog_owner — usado pelos
+// jobs de produção já existentes — a cada apply. databricks_grant gerencia
+// só o par principal+privilégio dele, coexistindo sem conflito.
+resource "databricks_grant" "gold_read_visualization_app" {
+  count      = var.environment == "prod" && var.app_service_principal_id != "" ? 1 : 0
+  schema     = "${databricks_catalog.insurance.name}.${databricks_schema.gold.name}"
+  principal  = var.app_service_principal_id
+  privileges = ["USE_SCHEMA", "SELECT"]
 }
 
-resource "databricks_grants" "monitoring_read_visualization_app" {
-  count  = var.environment == "prod" && var.app_service_principal_id != "" ? 1 : 0
-  schema = "${databricks_catalog.insurance.name}.${databricks_schema.monitoring.name}"
-
-  grant {
-    principal  = var.app_service_principal_id
-    privileges = ["USE_SCHEMA", "SELECT"]
-  }
+resource "databricks_grant" "monitoring_read_visualization_app" {
+  count      = var.environment == "prod" && var.app_service_principal_id != "" ? 1 : 0
+  schema     = "${databricks_catalog.insurance.name}.${databricks_schema.monitoring.name}"
+  principal  = var.app_service_principal_id
+  privileges = ["USE_SCHEMA", "SELECT"]
 }
 
 // A tabela `claims` em Gold é criada pelos jobs Spark (saveAsTable), não pelo

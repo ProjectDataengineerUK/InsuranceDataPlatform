@@ -95,6 +95,7 @@ def get_connection():
         server_hostname=cfg.host,
         http_path=f"/sql/1.0/warehouses/{os.environ['WAREHOUSE_ID']}",
         credentials_provider=lambda: cfg.authenticate,
+        catalog=os.environ["CATALOG"],
     )
 
 
