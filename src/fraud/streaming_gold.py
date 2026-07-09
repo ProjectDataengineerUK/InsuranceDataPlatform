@@ -91,7 +91,12 @@ def run_fraud_scoring_stream(
             )
         )
         .option("checkpointLocation", checkpoint_path)
-        .trigger(processingTime="30 seconds")
+        # Compute serverless (obrigatório neste workspace) não suporta trigger
+        # ProcessingTime "infinito" — só AvailableNow/Once. O job já roda como
+        # "continuous job" no Databricks (ver resources/jobs.fraud_score.yml),
+        # que reinicia o run assim que este termina, então availableNow
+        # entrega o mesmo efeito prático de streaming quase-contínuo.
+        .trigger(availableNow=True)
         .start()
     )
 

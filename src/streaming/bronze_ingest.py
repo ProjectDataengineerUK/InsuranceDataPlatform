@@ -85,7 +85,12 @@ def run_bronze_ingest(topic: str, bronze_table: str, checkpoint_path: str) -> St
             lambda batch_df, batch_id: _write_batch(batch_df, batch_id, bronze_table)
         )
         .option("checkpointLocation", checkpoint_path)
-        .trigger(processingTime="30 seconds")
+        # Compute serverless (obrigatório neste workspace) não suporta trigger
+        # ProcessingTime "infinito" — só AvailableNow/Once. O job já roda como
+        # "continuous job" no Databricks (ver resources/jobs.bronze.yml), que
+        # reinicia o run assim que este termina, então availableNow entrega o
+        # mesmo efeito prático de streaming quase-contínuo.
+        .trigger(availableNow=True)
         .start()
     )
 

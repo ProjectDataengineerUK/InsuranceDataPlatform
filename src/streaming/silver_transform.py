@@ -66,7 +66,12 @@ def run_silver_transform(
             )
         )
         .option("checkpointLocation", checkpoint_path)
-        .trigger(processingTime="1 minute")
+        # Compute serverless (obrigatório neste workspace) não suporta trigger
+        # ProcessingTime "infinito" — só AvailableNow/Once. O job já roda como
+        # "continuous job" no Databricks (ver resources/jobs.silver.yml), que
+        # reinicia o run assim que este termina, então availableNow entrega o
+        # mesmo efeito prático de streaming quase-contínuo.
+        .trigger(availableNow=True)
         .start()
     )
 
