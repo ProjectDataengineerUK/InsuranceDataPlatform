@@ -111,11 +111,16 @@ def train_fraud_model(
     baseline_table: str,
     random_state: int = 42,
 ) -> dict:
-    # mlflow tenta descobrir a registry URI lendo spark.conf.get(...) via Spark
-    # Connect (compute serverless), que rejeita esse config específico com
-    # CONFIG_NOT_AVAILABLE. Setar tracking URI explicitamente evita essa
-    # resolução automática via sessão Spark.
+    # MlflowClient() sempre resolve uma registry URI no construtor, mesmo sem
+    # nunca chamar nenhum método de registry — sem um valor explícito, ela cai
+    # em spark.conf.get("spark.mlflow.modelRegistryUri", ...) via Spark
+    # Connect (serverless), que rejeita esse config específico com
+    # CONFIG_NOT_AVAILABLE. Setar tracking/registry URI explicitamente evita
+    # essa resolução automática — o valor "databricks" aqui é só pra não
+    # cair nesse caminho; não registramos nada no Model Registry (ver
+    # comentário mais abaixo sobre o S3 AccessDenied do Unity Catalog).
     mlflow.set_tracking_uri("databricks")
+    mlflow.set_registry_uri("databricks")
     mlflow.set_experiment(experiment_name)
 
     x = features_df[FEATURE_COLUMNS]
