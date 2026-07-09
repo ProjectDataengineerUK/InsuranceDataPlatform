@@ -2,26 +2,38 @@
 de fraude (Bronze -> Gold, alvo < 1 min do DEFINE) e AT-003 (volume sustentado
 sem perda) contra um pipeline rodando de verdade em um workspace Databricks.
 
-Só produz números reais depois que:
-  1. o producer (src/ingestion/producer) estiver publicando eventos de verdade
-     no Kafka (Confluent Cloud);
-  2. os jobs `bronze_ingest`, `silver_transform` e `fraud_score_stream`
-     estiverem rodando (deploy em dev já funciona via CI/CD).
-
-Rodar como um job avulso no Databricks (ex.: `databricks bundle run` com um
-job ad-hoc apontando para este script) ou via notebook, sempre com
-`--catalog` do ambiente onde os jobs estão rodando. Não requer nenhuma nova
-infraestrutura: lê apenas as tabelas Delta que os próprios jobs já escrevem.
+Roda como job agendado (`resources/jobs.pipeline_monitoring.yml`, a cada
+15 min) — persiste cada checagem em `monitoring._pipeline_latency_results` e
+alerta (mesmo secret `sla-webhook-url` usado por sla_alerts.py/model_drift.py)
+quando alguma latência sai do SLA. Não requer nenhuma infraestrutura nova:
+lê apenas as tabelas Delta que os próprios jobs (bronze_ingest,
+fraud_score_stream) já escrevem.
 """
 
 import argparse
 import json
+import logging
+import sys
+from pathlib import Path
 
+# Job roda como spark_python_task via workspace files (sem empacotamento em
+# wheel) — Databricks só põe o diretório do próprio script no sys.path, não a
+# raiz do bundle. Sem isso, "from src..." abaixo falha com ModuleNotFoundError.
+# Databricks executa o job via exec(compile(source, filename, 'exec')), que
+# nao injeta __file__ nos globals — cai pro co_filename do frame atual.
+_this_file = globals().get("__file__") or sys._getframe().f_code.co_filename
+sys.path.insert(0, str(Path(_this_file).resolve().parents[1]))
+
+import requests
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import avg, col, count, date_trunc, expr
+from pyspark.sql.functions import avg, col, count, current_timestamp, date_trunc, expr
 from pyspark.sql.functions import max as spark_max
 
+from src.common.delta_write import append_or_create
+from src.common.secrets import get_secret
 from src.common.spark_session import get_spark
+
+logger = logging.getLogger(__name__)
 
 KAFKA_TO_BRONZE_SLA_SECONDS = 120  # AT-001: Kafka -> Bronze < 2 min
 FRAUD_SCORE_SLA_SECONDS = 60  # DEFINE: score de fraude visível em < 1 min
@@ -40,7 +52,7 @@ def measure_kafka_to_bronze_latency(
     """AT-001: latência entre o evento chegar no Kafka (kafka_timestamp) e ser
     persistido no Bronze (_ingested_at)."""
     df = _recent(spark.read.table(bronze_table), "_ingested_at", window_minutes)
-    if df.rdd.isEmpty():
+    if df.isEmpty():
         return {"sample_size": 0, "note": "sem eventos recentes no Bronze"}
 
     latency_df = df.withColumn(
@@ -71,7 +83,7 @@ def measure_fraud_score_latency(
     e o momento em que o job fraud_score_stream escreve o score em Gold
     (_scored_at)."""
     df = _recent(spark.read.table(gold_claims_table), "_scored_at", window_minutes)
-    if df.rdd.isEmpty():
+    if df.isEmpty():
         return {"sample_size": 0, "note": "sem claims recentes em gold.claims"}
 
     latency_df = df.withColumn(
@@ -128,16 +140,42 @@ def measure_throughput(spark: SparkSession, bronze_table: str, window_minutes: i
     }
 
 
+def send_sla_breach_alert(breaches: list[str], webhook_url: str | None) -> None:
+    if not breaches:
+        return
+
+    message = f"Pipeline fora do SLA em: {', '.join(breaches)}."
+    if not webhook_url:
+        logger.warning("sla-webhook-url not set, logging alert instead: %s", message)
+        return
+
+    response = requests.post(webhook_url, json={"text": message}, timeout=10)
+    response.raise_for_status()
+
+
+def persist_report(spark: SparkSession, report: dict, results_table: str) -> None:
+    rows = [
+        (metric_name, json.dumps(details, default=str), details.get("within_sla"))
+        for metric_name, details in report.items()
+    ]
+    report_df = spark.createDataFrame(
+        rows, ["metric_name", "details_json", "within_sla"]
+    ).withColumn("_checked_at", current_timestamp())
+    append_or_create(report_df, results_table)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--catalog", required=True, help="ex.: insurance_dev")
     parser.add_argument("--bronze-table", default=None, help="default: {catalog}.bronze.claims")
     parser.add_argument("--gold-claims-table", default=None, help="default: {catalog}.gold.claims")
+    parser.add_argument("--results-table", default=None, help="default: {catalog}.monitoring._pipeline_latency_results")
     parser.add_argument("--window-minutes", type=int, default=15)
     args = parser.parse_args()
 
     bronze_table = args.bronze_table or f"{args.catalog}.bronze.claims"
     gold_claims_table = args.gold_claims_table or f"{args.catalog}.gold.claims"
+    results_table = args.results_table or f"{args.catalog}.monitoring._pipeline_latency_results"
 
     spark = get_spark("measure-pipeline-latency")
 
@@ -151,6 +189,14 @@ def main() -> None:
         "at_003_throughput": measure_throughput(spark, bronze_table, args.window_minutes),
     }
     print(json.dumps(report, indent=2, default=str))
+
+    persist_report(spark, report, results_table)
+
+    breaches = [name for name, details in report.items() if details.get("within_sla") is False]
+    webhook_url = get_secret(
+        "insurance-platform", "sla-webhook-url", "SLA_WEBHOOK_URL", required=False
+    )
+    send_sla_breach_alert(breaches, webhook_url)
 
 
 if __name__ == "__main__":

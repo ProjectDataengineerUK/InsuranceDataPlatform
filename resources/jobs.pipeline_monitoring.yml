@@ -1,0 +1,35 @@
+resources:
+  jobs:
+    pipeline_latency_monitor:
+      name: insurance-pipeline-latency-monitor-${bundle.target}
+      schedule:
+        # A cada 15 min, alinhado ao --window-minutes default do script — evita
+        # gaps/sobreposição entre janelas de medição consecutivas.
+        quartz_cron_expression: "0 */15 * * * ?"
+        timezone_id: "America/Sao_Paulo"
+        pause_status: UNPAUSED
+
+      # Workspace trial só permite compute serverless — environment_key obrigatório.
+      tasks:
+        - task_key: measure_pipeline_latency
+          environment_key: default
+          spark_python_task:
+            python_file: ../scripts/measure_pipeline_latency.py
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--bronze-table"
+              - "${var.catalog}.bronze.claims"
+              - "--gold-claims-table"
+              - "${var.catalog}.gold.claims"
+              - "--results-table"
+              - "${var.catalog}.monitoring._pipeline_latency_results"
+              - "--window-minutes"
+              - "15"
+
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "2"
+            dependencies:
+              - requests

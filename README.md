@@ -113,13 +113,17 @@ O masking de `customer_id` e o row filter por região são aplicados automaticam
 
 ### Validação de latência e volume (AT-001 / AT-003)
 
-Depois que o pipeline estiver rodando de verdade em `dev` (producer publicando no Kafka + jobs `bronze_ingest`/`fraud_score_stream` ativos), rode:
+Automatizado: o job `pipeline_latency_monitor` (`resources/jobs.pipeline_monitoring.yml`) roda `scripts/measure_pipeline_latency.py` a cada 15 min, persiste cada checagem em `monitoring._pipeline_latency_results` e alerta (mesmo secret opcional `SLA_WEBHOOK_URL`) quando latência Kafka→Bronze (alvo < 2 min), score de fraude Bronze→Gold (alvo < 1 min) ou volume vs. `replay.events_per_minute` saem do SLA. Só produz números reais com o pipeline rodando de verdade (producer publicando + `bronze_ingest`/`fraud_score_stream` ativos).
+
+Pra rodar manualmente (debug):
 
 ```bash
 python scripts/measure_pipeline_latency.py --catalog insurance_dev
 ```
 
-Mede latência Kafka→Bronze (alvo < 2 min), latência de visibilidade do score de fraude Bronze→Gold (alvo < 1 min) e volume ingerido por minuto vs. os `replay.events_per_minute` configurados no producer. Só produz números reais com o pipeline em execução — não substitui rodar o sistema de verdade.
+### Shadow scoring do modelo de fraude
+
+`fraud_score_stream` escreve `model_fraud_score` em `gold.claims` — o score do modelo campeão (mlflow) calculado em paralelo à heurística, só para observabilidade/comparação. A decisão real (`fraud_flag`/`auto_approved`) continua vindo 100% da heurística de `streaming_score.py`; ver `docs/ARCHITECTURE.md` para o porquê (rótulo fraco, vazamento de rótulo) e os limites desse modo (modelo só recarrega no restart do job, não em tempo real a cada promoção).
 
 ## Estrutura do projeto
 

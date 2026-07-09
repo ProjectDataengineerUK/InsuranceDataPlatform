@@ -23,8 +23,17 @@ resources:
               - "/Volumes/${var.catalog}/gold/_checkpoints/claims"
               - "--results-table"
               - "${var.catalog}.monitoring._dq_results"
+              - "--experiment-name"
+              # Mesmo experimento usado por jobs.ml_training.yml — localiza o run
+              # champion pra shadow scoring (coluna model_fraud_score em
+              # gold.claims, não influencia auto_approved/fraud_flag).
+              - "/Users/${workspace.current_user.userName}/insurance-fraud-detection-${bundle.target}"
 
       environments:
         - environment_key: default
           spec:
             environment_version: "2"
+            dependencies:
+              # scikit-learn: necessário pro mlflow.pyfunc.spark_udf carregar/
+              # aplicar o modelo do champion (shadow scoring).
+              - scikit-learn

@@ -52,6 +52,24 @@ def test_build_claims_gold_scores_and_flags_claims(spark):
     assert result["cl2"]["auto_approved"] is False
     assert result["cl1"]["_ingested_at"] is not None
     assert result["cl1"]["_scored_at"] is not None
+    # Sem model_udf (nenhum champion carregado/bootstrap), shadow scoring fica
+    # nulo e não influencia auto_approved.
+    assert result["cl1"]["model_fraud_score"] is None
+
+
+def test_build_claims_gold_applies_model_udf_when_provided(spark):
+    from pyspark.sql.functions import lit
+
+    df = _silver_claims_df(spark)
+
+    result = {
+        row["claim_id"]: row
+        for row in build_claims_gold(df, model_udf=lambda *cols: lit(0.42)).collect()
+    }
+
+    assert result["cl1"]["model_fraud_score"] == 0.42
+    # Shadow score não altera a decisão real, que continua vindo da heurística.
+    assert result["cl1"]["auto_approved"] is True
 
 
 def test_process_batch_persists_quality_results_and_merges(spark):

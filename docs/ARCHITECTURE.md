@@ -101,7 +101,15 @@ O DESIGN original previa HCP Terraform (Terraform Cloud) como backend remoto. Po
 
 O retrain automático **não** usa `dbutils.jobs.taskValues`/`condition_task` do Databricks Jobs (não verificados sob compute serverless nesta sessão, dado quantas outras APIs precisaram de workaround). Em vez disso, `train_model.py` lê `monitoring._model_drift_results` ele mesmo a cada execução (`0 30 */6 * * ?`, 30min depois do `model_drift_monitor`) e só treina de verdade se: é a primeira execução (tabelas de baseline/drift ainda não existem), a última checagem sinalizou drift, ou `--force` foi passado.
 
-**Importante:** isso não muda o scoring ao vivo — `fraud_score_stream` continua usando a heurística de `streaming_score.py`, não o modelo treinado. Servir o modelo em produção é um próximo passo, não coberto aqui.
+**Importante:** isso não mudava o scoring ao vivo quando escrito — `fraud_score_stream` usava só a heurística de `streaming_score.py`. Ver seção seguinte para o shadow scoring adicionado depois.
+
+## Shadow scoring do modelo campeão + monitor de latência automatizado (2026-07-09)
+
+`fraud_score_stream` (`src/fraud/streaming_gold.py::load_champion_model_udf`) agora carrega o modelo mlflow marcado `model_stage=champion` via `mlflow.pyfunc.spark_udf` e escreve o resultado numa coluna extra `model_fraud_score` em `gold.claims` — **shadow mode**, não cutover: `apply_auto_approval`/`fraud_flag` continuam decidindo 100% pela heurística de `streaming_score.py`, o score do modelo é só observabilidade para comparar os dois antes de uma eventual troca futura. Motivo de ser shadow e não cutover: o modelo hoje treina sobre rótulo fraco derivado da própria heurística (f1=1.0, vazamento de rótulo documentado acima) — trocar a decisão real por esse modelo seria substituir uma heurística por uma cópia estatística da mesma heurística, não uma melhoria.
+
+`mlflow.pyfunc.spark_udf` é uma API nova nesta sessão (nunca exercitada, ao contrário de `dbutils.secrets`/tracking URI já provados sob Spark Connect) — `load_champion_model_udf` está envolvida em `try/except` amplo: se não existir champion ainda (bootstrap) ou se essa API não funcionar neste compute serverless, retorna `None` e o job segue rodando só com a heurística, nunca quebra o scoring real. O modelo é carregado **uma vez por run do job** (não por micro-batch); como `fraud_score_stream` é um continuous job, um champion novo (promovido a cada ciclo de `fraud_model_training`) só é pego no próximo restart do job — não há hot-reload dentro de um run em andamento.
+
+`scripts/measure_pipeline_latency.py` (que media AT-001/AT-003 mas nunca tinha rodado de verdade — inclusive tinha o mesmo bug de `.rdd.isEmpty()` já corrigido em outros 4 lugares nesta sessão, nunca pego porque nunca executou) agora roda como job agendado (`resources/jobs.pipeline_monitoring.yml`, a cada 15 min, alinhado à `--window-minutes` default), persiste cada checagem em `monitoring._pipeline_latency_results` e alerta via o mesmo secret `sla-webhook-url` quando alguma latência sai do SLA — mesmo padrão de `sla_alerts.py`/`model_drift.py`.
 
 ## Limitações conhecidas / roadmap
 
