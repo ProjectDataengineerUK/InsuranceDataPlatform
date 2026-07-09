@@ -16,6 +16,7 @@ ignore = ["E501"]
 "src/fraud/streaming_gold.py" = ["E402"]
 "src/fraud/train_model.py" = ["E402"]
 "src/monitoring/sla_alerts.py" = ["E402"]
+"src/monitoring/model_drift.py" = ["E402"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

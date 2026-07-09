@@ -1,0 +1,34 @@
+resources:
+  jobs:
+    model_drift_monitor:
+      name: insurance-model-drift-monitor-${bundle.target}
+      schedule:
+        # Roda antes de cada janela do fraud_model_training (ver
+        # jobs.ml_training.yml, cron "0 30 */6 * * ?") pra garantir que o
+        # treino sempre leia um resultado de drift fresco.
+        quartz_cron_expression: "0 0 */6 * * ?"
+        timezone_id: "America/Sao_Paulo"
+        pause_status: UNPAUSED
+
+      # Workspace trial só permite compute serverless — environment_key obrigatório.
+      tasks:
+        - task_key: check_model_drift
+          environment_key: default
+          spark_python_task:
+            python_file: ../src/monitoring/model_drift.py
+            parameters:
+              - "--gold-claims-table"
+              - "${var.catalog}.gold.claims"
+              - "--baseline-table"
+              - "${var.catalog}.monitoring._feature_baseline"
+              - "--results-table"
+              - "${var.catalog}.monitoring._model_drift_results"
+              - "--lookback-hours"
+              - "24"
+
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "2"
+            dependencies:
+              - requests

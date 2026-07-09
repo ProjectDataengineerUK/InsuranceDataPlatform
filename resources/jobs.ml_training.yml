@@ -3,7 +3,12 @@ resources:
     fraud_model_training:
       name: insurance-fraud-model-training-${bundle.target}
       schedule:
-        quartz_cron_expression: "0 0 3 * * ?"
+        # Roda 30 min depois de cada checagem do model_drift_monitor (ver
+        # jobs.model_monitoring.yml, cron "0 0 */6 * * ?") — o próprio
+        # train_model.py decide se retreina de verdade lendo o resultado mais
+        # recente de monitoring._model_drift_results (sem drift, só loga e
+        # sai; ver should_retrain).
+        quartz_cron_expression: "0 30 */6 * * ?"
         timezone_id: "America/Sao_Paulo"
         pause_status: UNPAUSED
 
@@ -22,6 +27,10 @@ resources:
               # "insurance-fraud-detection-dev") é rejeitado pela API com
               # INVALID_PARAMETER_VALUE.
               - "/Users/${workspace.current_user.userName}/insurance-fraud-detection-${bundle.target}"
+              - "--drift-results-table"
+              - "${var.catalog}.monitoring._model_drift_results"
+              - "--feature-baseline-table"
+              - "${var.catalog}.monitoring._feature_baseline"
 
       environments:
         - environment_key: default

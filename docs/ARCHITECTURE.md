@@ -52,8 +52,8 @@ Plataforma de dados de seguros 100% Databricks: ingestão de dados públicos rea
 │   ├── ingestion/producer/   # download + replay dos datasets públicos para o Kafka
 │   ├── streaming/       # jobs Bronze, Silver, Gold
 │   ├── quality/         # framework de qualidade de dados (sem DLT)
-│   ├── fraud/           # score de fraude (streaming) + treino do modelo (MLflow)
-│   └── monitoring/      # alertas de SLA
+│   ├── fraud/           # score de fraude (streaming) + treino do modelo (MLflow, com gate champion/challenger)
+│   └── monitoring/      # alertas de SLA + monitor de drift de features do modelo
 ├── terraform/           # Unity Catalog, secrets (IaC que muda raramente)
 ├── resources/            # Jobs/Workflows via Databricks Asset Bundles
 ├── databricks.yml        # root do bundle (targets dev/staging/prod)
@@ -90,6 +90,16 @@ O DESIGN original previa HCP Terraform (Terraform Cloud) como backend remoto. Po
 - **SUSEP (AUTOSEG)**: confirmado via `DEFINICOES_AUTOSEG.pdf` (fonte oficial) que o dataset é **agregado** — cada linha é uma contagem/soma (`EXPOSICAO`, `PREMIO`, `FREQ_SIN1..9`, `INDENIZ1..9`) por grupamento de categoria tarifária/região/modelo/ano/sexo/faixa etária, não um sinistro individual. `susep_loader.py` gera sinistros sintéticos por linha, calibrados nas distribuições reais (frequência e indenização média por grupo) via amostragem log-normal — uma técnica estatística legítima, não dados inventados sem base real.
 - **ANS (Dados de Beneficiários por Operadora)**: confirmado via `dicionario_de_dados_sib.ods` (fonte oficial) que é um dataset **real, um registro por movimentação de beneficiário** (inclusão, cancelamento, reativação, retificação), com `ID_MOTIVO_MOVIMENTO` identificando o tipo exato do evento. `ans_loader.py` usa os nomes de coluna reais (`CD_OPERADORA`, `CD_PLANO_RPS`, `DT_INCLUSAO`, `ID_MOTIVO_MOVIMENTO`) e infere `event_type` (`policy-created`/`policy-cancelled`/`policy-updated`) a partir dos códigos oficiais.
 - **Limitação herdada**: nem SUSEP nem ANS expõem um identificador de cliente/segurado reutilizável (anonimização LGPD) — `customer_id` fica `None` em ambos os loaders. `premium_amount`, `coverage_type` e `region` também não estão disponíveis no dataset da ANS consultado.
+
+## Gate de CI/CD do modelo, monitor de drift e retrain automático (2026-07-09)
+
+`train_model.py` não promove mais toda versão treinada — compara o `f1` do novo modelo contra o alias `champion` atual (via `MlflowClient.get_model_version_by_alias`/`search_model_versions`, já que `ModelInfo.registered_model_version` não é garantido entre versões do mlflow) e só move o alias `champion` se o novo modelo for estritamente melhor. Versões não promovidas ficam registradas com tags (`eval_f1`, `training_outcome=rejected`) em vez de um alias `challenger`, que seria reatribuído em todo run independente de qualidade.
+
+`src/monitoring/model_drift.py` (job `model_drift_monitor`, a cada 6h) recalcula as mesmas três features de `streaming_score.py::compute_fraud_score` sobre uma janela recente de `gold.claims` e compara contra a baseline (`monitoring._feature_baseline`, escrita por `train_model.py` só quando um modelo é promovido) via um z-score simples (sem scipy, mesmo estilo leve de estatística já usado no projeto). Resultado vai para `monitoring._model_drift_results`; drift nunca faz o job falhar, só fica registrado na tabela.
+
+O retrain automático **não** usa `dbutils.jobs.taskValues`/`condition_task` do Databricks Jobs (não verificados sob compute serverless nesta sessão, dado quantas outras APIs precisaram de workaround). Em vez disso, `train_model.py` lê `monitoring._model_drift_results` ele mesmo a cada execução (`0 30 */6 * * ?`, 30min depois do `model_drift_monitor`) e só treina de verdade se: é a primeira execução (tabelas de baseline/drift ainda não existem), a última checagem sinalizou drift, ou `--force` foi passado.
+
+**Importante:** isso não muda o scoring ao vivo — `fraud_score_stream` continua usando a heurística de `streaming_score.py`, não o modelo registrado no Unity Catalog. Servir o modelo UC em produção é um próximo passo, não coberto aqui.
 
 ## Limitações conhecidas / roadmap
 

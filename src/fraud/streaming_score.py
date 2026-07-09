@@ -17,6 +17,11 @@ NIGHT_END_HOUR = 6
 FREQUENCY_WINDOW_DAYS = 1
 DEFAULT_SCORE_THRESHOLD = 0.7
 
+# Colunas produzidas por compute_fraud_score — dono único da lista de features
+# usada tanto pelo treino do modelo (train_model.py) quanto pelo monitor de
+# drift (monitoring/model_drift.py), garantindo paridade por construção.
+FEATURE_COLUMNS = ["feature_night_claim", "feature_high_frequency", "feature_amount_outlier"]
+
 FEATURE_WEIGHTS = {
     "night_claim": 0.25,
     "high_frequency": 0.35,

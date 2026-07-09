@@ -1,9 +1,10 @@
 from dataclasses import dataclass
 
-from pyspark.errors import AnalysisException
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.functions import col, current_timestamp
 from pyspark.sql.functions import max as spark_max
+
+from src.common.delta_write import append_or_create
 
 
 @dataclass
@@ -64,14 +65,5 @@ def persist_results(spark: SparkSession, results: list[DQResult], results_table:
     results_df = spark.createDataFrame(
         rows, ["check_name", "table_name", "passed", "failed_rows"]
     ).withColumn("_checked_at", current_timestamp())
-    try:
-        results_df.write.format("delta").mode("append").saveAsTable(results_table)
-    except AnalysisException as exc:
-        # silver_claims e silver_policies rodam como streams separadas e podem
-        # colidir na primeira escrita: ambas veem a tabela ausente e tentam
-        # criá-la ao mesmo tempo. Quem perder a corrida cai aqui — só falta
-        # inserir na tabela que a outra acabou de criar.
-        if "already exists" not in str(exc).lower():
-            raise
-        results_df.write.format("delta").mode("append").insertInto(results_table)
+    append_or_create(results_df, results_table)
     return all(r.passed for r in results)
