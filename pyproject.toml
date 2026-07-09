@@ -6,6 +6,17 @@ target-version = "py311"
 select = ["E", "F", "I", "UP", "B"]
 ignore = ["E501"]
 
+[tool.ruff.lint.per-file-ignores]
+# Entrypoints de job Databricks: precisam inserir a raiz do bundle no
+# sys.path antes de "from src..." (não há empacotamento em wheel — ver
+# comentário no topo de cada arquivo e em databricks.yml).
+"src/streaming/bronze_ingest.py" = ["E402"]
+"src/streaming/silver_transform.py" = ["E402"]
+"src/streaming/gold_aggregate.py" = ["E402"]
+"src/fraud/streaming_gold.py" = ["E402"]
+"src/fraud/train_model.py" = ["E402"]
+"src/monitoring/sla_alerts.py" = ["E402"]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
