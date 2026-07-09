@@ -26,7 +26,12 @@ jobs:
     runs-on: ubuntu-latest
     # Folga sobre PRODUCER_MAX_DURATION_SECONDS (480s = 8min) pro processo
     # encerrar sozinho (flush + return) antes do timeout forçar um kill.
-    timeout-minutes: 9
+    # O relógio de 480s de cada fonte só começa depois do download do seu
+    # dataset — o do SUSEP (microdados reais, ~2.45M linhas) sozinho já leva
+    # ~90-100s, então 9min não cobria checkout+setup+download+480s+shutdown
+    # (confirmado: as últimas execuções agendadas terminaram todas "cancelled"
+    # por volta de 9m20s-9m50s).
+    timeout-minutes: 13
 
     steps:
       - uses: actions/checkout@v4
