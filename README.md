@@ -4,6 +4,8 @@ Plataforma de dados de seguros 100% Databricks — ingestão de dados públicos 
 
 Ver a arquitetura completa em [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) e o histórico de decisões em [`.claude/sdd/features/`](.claude/sdd/features/).
 
+Este repositório também serve como base para processos seletivos de Engenheiro de Dados Especialista Sênior (Spark/PySpark, Kafka, Databricks, Databricks Streaming) — ver [`docs/SPECIALIST_HIRING_DOSSIER.md`](docs/SPECIALIST_HIRING_DOSSIER.md) para o mapeamento de competências, os 9 gargalos técnicos reais enfrentados e o roteiro de entrevista calibrado por incidente.
+
 ## Stack
 
 - **Processamento:** Apache Spark (Structured Streaming), Delta Lake
