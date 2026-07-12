@@ -81,9 +81,17 @@ def test_invalid_cause_code_is_flagged_non_compliant(spark):
 
 
 def test_missing_required_field_is_flagged_non_compliant(spark):
+    # Schema explícito: policy_id é None na única linha — sem outro valor não-
+    # nulo pra inferir o tipo da coluna, createDataFrame falharia com
+    # CANNOT_DETERMINE_TYPE (mesmo bug já visto em measure_pipeline_latency.py
+    # nesta sessão).
+    schema = (
+        "external_reference_id string, source_system string, policy_id string, "
+        "event_timestamp timestamp, amount decimal(18,2), region string, cause_code int"
+    )
     silver_df = spark.createDataFrame(
         [("ref1", "insurer_a", None, datetime(2020, 5, 4), Decimal("1000.00"), "SP", 6)],
-        SILVER_COLUMNS,
+        schema=schema,
     )
 
     result = build_gold_susep_claims(silver_df, _empty_reconciliation_df(spark)).collect()[0]
