@@ -3,15 +3,14 @@ import streamlit as st
 st.set_page_config(page_title="Insurance Regulatory Platform", layout="wide")
 
 pages = [
-    st.Page("pages/status.py", title="Status da Plataforma", default=True),
-    st.Page("pages/consultar_apolice.py", title="Consultar Apólice"),
-    st.Page("pages/consultar_cliente.py", title="Consultar Cliente"),
-    st.Page("pages/consultar_sinistro.py", title="Consultar Sinistro"),
-    st.Page("pages/pesquisar_banco.py", title="Pesquisar Banco"),
-    st.Page("pages/pesquisar_seguradora.py", title="Pesquisar Seguradora"),
-    st.Page("pages/dashboard_link.py", title="Dashboard"),
+    st.Page("pages/status.py", title="Visão Geral", default=True),
+    st.Page("pages/susep_compliance.py", title="Conformidade SUSEP"),
+    st.Page("pages/fraud_probability.py", title="Probabilidade de Fraude"),
+    st.Page("pages/pipeline_monitoring.py", title="Monitoramento & Latência"),
+    st.Page("pages/dataops_mlops_sentinel.py", title="DataOps/MLOps Sentinela"),
+    st.Page("pages/performance.py", title="Performance Kafka & Databricks"),
+    st.Page("pages/custos.py", title="Custos"),
     st.Page("pages/lineage.py", title="Lineage"),
-    st.Page("pages/auditoria.py", title="Auditoria"),
 ]
 
 navigation = st.navigation(pages)

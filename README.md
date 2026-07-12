@@ -131,7 +131,20 @@ Módulo separado do pipeline operacional: simula 3 seguradoras/bancos fictícios
 
 ### Insurance Visualization Layer (AI/BI Dashboard + Databricks App + Genie, só em prod)
 
-Camada de apresentação sobre o Gold já existente — nenhuma tabela/pipeline novo. Só existe no target `prod` (`resources/visualization.yml`, dentro de `targets.prod.resources`); `dev`/`staging` não ganham nenhum recurso desta feature. Detalhes de design em [`.claude/sdd/features/DESIGN_INSURANCE_VISUALIZATION_LAYER.md`](.claude/sdd/features/DESIGN_INSURANCE_VISUALIZATION_LAYER.md) e decisões duradouras em [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+Camada de apresentação sobre o Gold já existente — nenhuma tabela/pipeline novo (exceto `susep_compliant`/`compliance_issues`, 2 colunas novas em `gold.regulatory_susep_claims`, ver abaixo). Só existe no target `prod` (`resources/visualization.yml`, dentro de `targets.prod.resources`); `dev`/`staging` não ganham nenhum recurso desta feature. Detalhes de design em [`.claude/sdd/features/DESIGN_INSURANCE_VISUALIZATION_LAYER.md`](.claude/sdd/features/DESIGN_INSURANCE_VISUALIZATION_LAYER.md) e decisões duradouras em [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+**Revisado (2026-07-10):** o Databricks App foi reorientado pro core regulatório do projeto, não CRUD genérico — as telas de "Consultar Apólice/Cliente/Sinistro" e "Pesquisar Banco/Seguradora" do MVP original foram substituídas por:
+
+| Página | Conteúdo |
+|--------|----------|
+| Visão Geral | Freshness dos pipelines (operacional + regulatório) + resumo de conformidade SUSEP |
+| Conformidade SUSEP | Contratos aderentes vs. fora das regras (`gold.regulatory_susep_claims.susep_compliant`), com motivos, + volume por banco/seguradora |
+| Probabilidade de Fraude | `gold.claims` ordenado por `fraud_score`, mais sinistros fora do SLA (mesma regra de `sla_alerts.py`) |
+| Monitoramento & Latência | `monitoring._pipeline_latency_results` (Kafka→Bronze, Bronze→Gold, throughput) |
+| DataOps/MLOps Sentinela | `monitoring._dq_results` + `monitoring._model_drift_results` |
+| Performance Kafka & Databricks | Taxa de quarentena por tópico + throughput vs. volume esperado |
+| Custos | `system.billing.usage` (system table nativa — requer habilitação prévia pelo account admin; a página degrada com aviso, não quebra, se não estiver habilitada) |
+| Lineage | Inalterada |
 
 #### Ativando a camada de visualização
 
