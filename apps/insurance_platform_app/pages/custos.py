@@ -26,9 +26,10 @@ lookback_days = st.slider("Janela (dias)", min_value=1, max_value=90, value=30)
 st.subheader("Consumo por produto (DBUs)")
 try:
     product_rows = run_query(connection, build_cost_usage_by_product_query(lookback_days))
-    st.dataframe(product_rows, use_container_width=True) if product_rows else st.info(
-        "Sem dados de consumo no período selecionado."
-    )
+    if product_rows:
+        st.dataframe(product_rows, use_container_width=True)
+    else:
+        st.info("Sem dados de consumo no período selecionado.")
 except Exception as exc:  # noqa: BLE001
     st.warning(
         "Não foi possível consultar system.billing.usage — provavelmente as system "
@@ -39,8 +40,9 @@ st.divider()
 st.subheader("Top jobs por consumo (DBUs)")
 try:
     job_rows = run_query(connection, build_cost_usage_by_job_query(lookback_days, row_limit=20))
-    st.dataframe(job_rows, use_container_width=True) if job_rows else st.info(
-        "Sem dados de consumo por job no período selecionado."
-    )
+    if job_rows:
+        st.dataframe(job_rows, use_container_width=True)
+    else:
+        st.info("Sem dados de consumo por job no período selecionado.")
 except Exception as exc:  # noqa: BLE001
     st.warning(f"Não foi possível consultar consumo por job. Detalhe: {exc}")

@@ -1,5 +1,3 @@
-import traceback
-
 import streamlit as st
 from queries import build_dq_results_query, build_model_drift_query, get_connection, run_query
 
@@ -24,12 +22,12 @@ try:
     dq_rows = run_query(connection, build_dq_results_query(row_limit=200))
     if only_failed:
         dq_rows = [row for row in dq_rows if not row["passed"]]
-    st.dataframe(dq_rows, use_container_width=True) if dq_rows else st.success(
-        "Nenhuma falha de qualidade de dados nas últimas checagens."
-    )
+    if dq_rows:
+        st.dataframe(dq_rows, use_container_width=True)
+    else:
+        st.success("Nenhuma falha de qualidade de dados nas últimas checagens.")
 except Exception as exc:  # noqa: BLE001
     st.error(f"Erro ao consultar qualidade de dados: {exc}")
-    st.code(traceback.format_exc())  # diagnóstico temporário, ver docs/ARCHITECTURE.md
 
 st.divider()
 st.subheader("Drift de features do modelo de fraude")

@@ -1,5 +1,3 @@
-import traceback
-
 import streamlit as st
 from queries import (
     build_source_system_volume_query,
@@ -46,20 +44,20 @@ try:
     rows = run_query(
         connection, build_susep_claims_query(compliant=(view == "Contratos aderentes"))
     )
-    st.dataframe(rows, use_container_width=True) if rows else st.info(
-        "Nenhum contrato encontrado nesta categoria."
-    )
+    if rows:
+        st.dataframe(rows, use_container_width=True)
+    else:
+        st.info("Nenhum contrato encontrado nesta categoria.")
 except Exception as exc:  # noqa: BLE001
     st.error(f"Erro ao consultar contratos: {exc}")
-    st.code(traceback.format_exc())  # diagnóstico temporário, ver docs/ARCHITECTURE.md
 
 st.divider()
 st.subheader("Volume por banco/seguradora")
 try:
     volume_rows = run_query(connection, build_source_system_volume_query())
-    st.dataframe(volume_rows, use_container_width=True) if volume_rows else st.info(
-        "Sem dados de bancos/seguradoras ainda."
-    )
+    if volume_rows:
+        st.dataframe(volume_rows, use_container_width=True)
+    else:
+        st.info("Sem dados de bancos/seguradoras ainda.")
 except Exception as exc:  # noqa: BLE001
     st.error(f"Erro ao consultar volume por fonte: {exc}")
-    st.code(traceback.format_exc())  # diagnóstico temporário, ver docs/ARCHITECTURE.md
