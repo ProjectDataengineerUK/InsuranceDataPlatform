@@ -48,13 +48,22 @@ for topic, bronze_table in BRONZE_TABLES:
             }
         )
     except Exception as exc:  # noqa: BLE001
+        # bronze.<table>/bronze.<table>_quarantine só existem depois do
+        # primeiro evento válido/malformado daquele tópico (bronze_ingest.py
+        # só escreve — e cria a tabela — quando há pelo menos 1 linha),
+        # então TABLE_OR_VIEW_NOT_FOUND aqui é "sem dados ainda", não erro.
+        message = (
+            "Sem dados ainda (tabela criada só após o primeiro evento do tópico)"
+            if "TABLE_OR_VIEW_NOT_FOUND" in str(exc)
+            else str(exc)
+        )
         quarantine_rows.append(
             {
                 "topic": topic,
                 "valid_count": None,
                 "quarantine_count": None,
                 "quarantine_rate_pct": None,
-                "error": str(exc),
+                "error": message,
             }
         )
 
