@@ -21,7 +21,12 @@ STATUS_CHECKS = [
     ("Silver (operacional)", "silver.claims", "_ingested_at"),
     ("Gold (fraude)", "gold.claims", "_scored_at"),
     ("Bronze (regulatório)", "bronze.regulatory_claims_raw", "_ingested_at"),
-    ("Gold (SUSEP export)", "gold.regulatory_susep_claims", "D_OCORR"),
+    # gold.regulatory_susep_claims não tem coluna de timestamp de
+    # processamento (só D_OCORR, data do sinistro — string "yyyyMMdd", não
+    # datetime, quebrava .replace(tzinfo=...) com TypeError, confirmado em
+    # produção). regulatory_dq_summary é gerado pelo mesmo job
+    # (gold_susep_export.py::run_gold_export_job) e já tem _generated_at.
+    ("Gold (SUSEP export)", "gold.regulatory_dq_summary", "_generated_at"),
 ]
 
 st.title("Insurance Regulatory Platform")
