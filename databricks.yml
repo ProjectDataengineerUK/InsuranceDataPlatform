@@ -32,6 +32,25 @@ targets:
     default: true
     variables:
       catalog: insurance_dev
+    # Workspace trial: cota de serverless compute estoura com dev + prod
+    # rodando os mesmos 7 jobs contínuos em paralelo (RESOURCE_EXHAUSTED
+    # confirmado num deploy real). Os jobs declaram pause_status: UNPAUSED
+    # explicitamente (pra sobrepor o default de development mode), então só
+    # dá pra manter dev parado sobrepondo de volta aqui.
+    resources:
+      jobs:
+        bronze_ingest:
+          continuous:
+            pause_status: PAUSED
+        silver_transform:
+          continuous:
+            pause_status: PAUSED
+        fraud_score_stream:
+          continuous:
+            pause_status: PAUSED
+        regulatory_bronze_ingest:
+          continuous:
+            pause_status: PAUSED
 
   staging:
     mode: production
