@@ -1,6 +1,29 @@
 from datetime import datetime
 
+from pyspark.sql.types import (
+    BooleanType,
+    StringType,
+    StructField,
+    StructType,
+    TimestampType,
+)
+
 from src.open_insurance.shareable_view import run_shareable_view
+
+# valid_to é None em todas as linhas do fixture — spark.createDataFrame não
+# consegue inferir o tipo de uma coluna 100% nula sem schema explícito
+# (CANNOT_DETERMINE_TYPE, confirmado no CI real).
+CONSENT_SILVER_SCHEMA = StructType(
+    [
+        StructField("policy_id", StringType(), nullable=False),
+        StructField("consent_status", StringType(), nullable=False),
+        StructField("target_institution", StringType(), nullable=False),
+        StructField("scope", StringType(), nullable=True),
+        StructField("is_current", BooleanType(), nullable=False),
+        StructField("valid_from", TimestampType(), nullable=False),
+        StructField("valid_to", TimestampType(), nullable=True),
+    ]
+)
 
 
 def _write_table(spark, rows, schema, table_name):
@@ -17,15 +40,7 @@ def test_shareable_view_includes_granted_with_and_without_claims(spark):
             ("p2", "GRANTED", "insurer_b", "claims,profile", True, datetime(2026, 1, 1), None),
             ("p3", "REVOKED", "insurer_a", "claims,profile", True, datetime(2026, 1, 1), None),
         ],
-        [
-            "policy_id",
-            "consent_status",
-            "target_institution",
-            "scope",
-            "is_current",
-            "valid_from",
-            "valid_to",
-        ],
+        CONSENT_SILVER_SCHEMA,
         "shareable_test_consent_silver",
     )
     _write_table(
