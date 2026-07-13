@@ -1,4 +1,5 @@
 import os
+import traceback
 from dataclasses import dataclass
 
 
@@ -196,7 +197,15 @@ def get_connection():
 
 
 def run_query(connection, query: SqlQuery) -> list[dict]:
-    with connection.cursor() as cursor:
-        cursor.execute(query.sql, query.params)
-        columns = [description[0] for description in cursor.description]
-        return [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(query.sql, query.params)
+            columns = [description[0] for description in cursor.description]
+            return [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
+    except Exception as exc:
+        # Diagnóstico temporário: cada página só mostra str(exc) via st.error,
+        # escondendo o traceback real — embutir aqui deixa a linha exata
+        # visível na própria tela do app sem precisar dos logs do Compute.
+        # Reverter depois de identificar a causa do TypeError intermitente
+        # "'function' object is not iterable".
+        raise RuntimeError(f"{exc}\n\n{traceback.format_exc()}") from exc
