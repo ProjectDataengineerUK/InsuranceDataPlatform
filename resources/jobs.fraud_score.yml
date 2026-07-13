@@ -2,13 +2,24 @@ resources:
   jobs:
     fraud_score_stream:
       name: insurance-fraud-score-stream-${bundle.target}
-      continuous:
+      # Era continuous — trocado pra schedule em 2026-07-13: com
+      # bronze_ingest/silver_transform/fraud_score_stream todos continuous
+      # disputando a mesma cota apertada de serverless, este job ficava
+      # preso processando exatamente 1 versão do Delta por execução antes
+      # de ser reciclado (confirmado inspecionando offsets/0,1,2 do
+      # checkpoint: reservoirVersion 1→2→3 ao longo de 5h, enquanto
+      # silver.claims já tinha 35133 linhas) — nunca alcançava o estado
+      # atual da tabela. Agendado dá a cada execução uma janela de compute
+      # dedicada pra esvaziar o backlog de uma vez, sem competir por
+      # capacidade continuamente. Troca o alvo de latência original do
+      # DEFINE (< 1 min) por um SLA mais realista (~5 min) — melhor do que
+      # o continuous não estava entregando de verdade nesta cota.
+      schedule:
+        quartz_cron_expression: "0 */5 * * * ?"
+        timezone_id: "America/Sao_Paulo"
         pause_status: UNPAUSED
       max_concurrent_runs: 1
 
-      # Contínuo e desacoplado do agregado Gold (que roda a cada 10 min) para
-      # atender ao Success Criteria original do DEFINE: score de fraude
-      # visível em < 1 min. Trigger de 30s dá folga sobre esse alvo.
       tasks:
         - task_key: fraud_score_claims
           environment_key: default

@@ -46,7 +46,8 @@ targets:
           continuous:
             pause_status: PAUSED
         fraud_score_stream:
-          continuous:
+          # schedule, não continuous, desde 2026-07-13 (ver resources/jobs.fraud_score.yml).
+          schedule:
             pause_status: PAUSED
         regulatory_bronze_ingest:
           continuous:
