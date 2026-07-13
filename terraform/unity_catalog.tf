@@ -81,6 +81,20 @@ resource "databricks_grants" "gold_read_only_analysts" {
   }
 }
 
+// monitoring nunca teve um databricks_grants próprio (lacuna desde a criação
+// do schema) — passou despercebido enquanto o workspace anterior dava acesso
+// implícito ao service principal do Databricks App. Confirmado num deploy
+// real neste workspace novo: INSUFFICIENT_PERMISSIONS "USE SCHEMA on Schema
+// 'insurance_prod.monitoring'" nas páginas de latência/DataOps do app.
+resource "databricks_grants" "monitoring_read_write" {
+  schema = "${databricks_catalog.insurance.name}.${databricks_schema.monitoring.name}"
+
+  grant {
+    principal  = var.catalog_owner
+    privileges = ["USE_SCHEMA", "CREATE_TABLE", "SELECT", "MODIFY"]
+  }
+}
+
 // Volumes gerenciados para checkpoint do Structured Streaming — os jobs
 // referenciam /Volumes/${var.catalog}/<schema>/_checkpoints/<nome> (ver
 // resources/jobs.bronze.yml, jobs.silver.yml, jobs.fraud_score.yml). Um UC
