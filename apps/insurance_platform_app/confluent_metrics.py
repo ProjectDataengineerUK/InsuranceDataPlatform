@@ -40,8 +40,14 @@ def _query_metric(
     # `.isoformat()" padrão do Python produz "+00:00", que a API não aceita.
     now = datetime.now(UTC).replace(second=0, microsecond=0)
     start = now - timedelta(minutes=lookback_minutes)
+    # A Metrics API rejeita qualquer "agg" além de "SUM"/null pra essas
+    # métricas (confirmado em produção: 400 "agg must be null or 'SUM'").
+    # Como a granularidade já é PT1M (o menor bucket suportado), SUM aqui
+    # não soma múltiplos pontos de verdade — é, na prática, o único valor
+    # reportado naquele minuto para o group_by (consumer_group/topic/
+    # partição), não uma agregação com perda de informação.
     body = {
-        "aggregations": [{"metric": metric, "agg": "MAX"}],
+        "aggregations": [{"metric": metric, "agg": "SUM"}],
         "filter": {
             "op": "AND",
             "filters": [{"field": "resource.kafka.id", "op": "EQ", "value": cluster_id}],
