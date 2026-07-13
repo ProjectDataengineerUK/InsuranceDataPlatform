@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 import random
 import time
 from collections.abc import Iterator
@@ -12,6 +13,21 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TOPIC_PARTITIONS = 6
 DEFAULT_TOPIC_REPLICATION_FACTOR = 3
+
+
+def _sanitize_for_json(event: dict[str, Any]) -> dict[str, Any]:
+    # pd.DataFrame(rows) força colunas numéricas mistas com None pro dtype
+    # float64, convertendo None em NaN silenciosamente (ex.:
+    # regulatory_feeds.py usa None pra simular campo ausente em
+    # CLAIM_AMOUNT/amountCents) — json.dumps serializa float('nan') como o
+    # token JSON inválido "NaN" (não "null"), que o from_json/cast do lado
+    # Spark não trata como ausente, e sim como a string literal "NaN"
+    # (CAST_INVALID_INPUT confirmado num deploy real). Convertendo de volta
+    # pra None aqui garante que "campo ausente" sempre vire JSON null.
+    return {
+        key: (None if isinstance(value, float) and math.isnan(value) else value)
+        for key, value in event.items()
+    }
 
 
 def build_producer(bootstrap_servers: str, api_key: str, api_secret: str) -> Producer:
@@ -117,7 +133,7 @@ def publish_events(
                 or event.get("customer_id")
                 or event.get("external_reference_id")
             )
-            payload = json.dumps(event, default=str).encode("utf-8")
+            payload = json.dumps(_sanitize_for_json(event), default=str).encode("utf-8")
             producer.produce(
                 topic=topic,
                 key=key.encode("utf-8"),
