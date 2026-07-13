@@ -50,7 +50,14 @@ _REPORT_ROW_SCHEMA = StructType(
 )
 
 KAFKA_TO_BRONZE_SLA_SECONDS = 120  # AT-001: Kafka -> Bronze < 2 min
-FRAUD_SCORE_SLA_SECONDS = 60  # DEFINE: score de fraude visível em < 1 min
+# Alvo original do DEFINE era < 1 min (60s), mas fraud_score_stream virou
+# schedule */5min (não mais continuous) por cota de serverless do workspace
+# trial (ver docs/ARCHITECTURE.md, "fraud_score_stream virou schedule") — com
+# 60s este check reprovava sempre, estruturalmente, mesmo com o pipeline
+# saudável. 420s (7 min) cobre o pior caso realista: um claim que chega logo
+# após uma execução começar espera quase um ciclo inteiro (5 min) + tempo de
+# execução do job antes de ser pontuado.
+FRAUD_SCORE_SLA_SECONDS = 420
 EXPECTED_EVENTS_PER_MINUTE = 100  # replay.events_per_minute em config.yaml
 
 
@@ -142,15 +149,22 @@ def measure_throughput(spark: SparkSession, bronze_table: str, window_minutes: i
         .collect()
     )
     events_per_minute = [row["events"] for row in per_minute]
+    minutes_observed = len(events_per_minute)
+    minutes_below_80pct_expected = sum(
+        1 for events in events_per_minute if events < 0.8 * EXPECTED_EVENTS_PER_MINUTE
+    )
 
     return {
         "quarantine_count": quarantine_count,
-        "minutes_observed": len(events_per_minute),
+        "minutes_observed": minutes_observed,
         "events_per_minute": events_per_minute,
         "expected_events_per_minute": EXPECTED_EVENTS_PER_MINUTE,
-        "minutes_below_80pct_expected": sum(
-            1 for events in events_per_minute if events < 0.8 * EXPECTED_EVENTS_PER_MINUTE
-        ),
+        "minutes_below_80pct_expected": minutes_below_80pct_expected,
+        # None (não False) quando não há nenhum minuto observado na janela —
+        # "sem dado" e "abaixo do esperado" são coisas diferentes; o bug
+        # original deixava all=None e o app (pipeline_monitoring.py) tratava
+        # isso como falso, mostrando "fora do SLA" mesmo sem nenhum dado.
+        "within_sla": None if minutes_observed == 0 else minutes_below_80pct_expected == 0,
     }
 
 
