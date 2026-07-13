@@ -8,6 +8,7 @@ topics:
   policy_created: "policy-created"
   customer_updated: "customer-updated"
   regulatory_claim_report: "regulatory-claim-report"
+  consent_updated: "consent-updated"
 
 sources:
   susep:
@@ -54,6 +55,17 @@ sources:
     dataset_path: "data/susep_sinistros.csv"
     event_topic: "regulatory_claim_report"
     sample_rows: 300
+  consent_simulator:
+    enabled: true
+    # Módulo Open Insurance (consentimento do cliente) — distinto do stub
+    # "open_insurance" acima, que é reservado para uma futura integração real
+    # com o sandbox Open Insurance Brasil. Reaproveita o mesmo CSV da SUSEP
+    # só para ter policy_id que também aparecem em gold.claims.
+    dataset_url: "https://dadosabertos.susep.gov.br/dadosabertos/auto_apos_2006/S_AUTO_2020B.zip"
+    dataset_path: "data/susep_sinistros.csv"
+    event_topic: "consent_updated"
+    sample_rows: 2000
+    sample_size: 200
 
 replay:
   events_per_minute: 100

@@ -43,6 +43,24 @@ CUSTOMER_EVENT_SCHEMA = StructType(
     ]
 )
 
+# consent_status: "GRANTED" ou "REVOKED". target_institution reaproveita as
+# 3 instituições fictícias do módulo regulatório (insurer_a/b/c) — ver
+# src/open_insurance/consent_scd.py e docs/ARCHITECTURE.md.
+#
+# Chave é policy_id, não customer_id: susep_loader.py e ans_loader.py zeram
+# customer_id de propósito (dados reais anonimizados, sem identificador de
+# cliente) — customer_id é sempre NULL em gold.claims. policy_id é o único
+# identificador estável e sempre populado (real ou fallback uuid4).
+CONSENT_EVENT_SCHEMA = StructType(
+    [
+        StructField("policy_id", StringType(), nullable=False),
+        StructField("consent_status", StringType(), nullable=False),
+        StructField("target_institution", StringType(), nullable=False),
+        StructField("scope", StringType(), nullable=True),
+        StructField("event_timestamp", TimestampType(), nullable=False),
+    ]
+)
+
 # Superset de campos crus (não tipados — datas/moeda ficam StringType de
 # propósito) das 3 fontes fictícias de src/ingestion/producer/datasets/
 # regulatory_feeds.py. from_json tolera chaves ausentes por registro (viram
@@ -80,4 +98,5 @@ SCHEMA_REGISTRY = {
     "policy-created": POLICY_EVENT_SCHEMA,
     "customer-updated": CUSTOMER_EVENT_SCHEMA,
     "regulatory-claim-report": REGULATORY_CLAIM_RAW_SCHEMA,
+    "consent-updated": CONSENT_EVENT_SCHEMA,
 }

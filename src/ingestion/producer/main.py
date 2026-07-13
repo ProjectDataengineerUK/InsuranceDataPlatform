@@ -7,6 +7,7 @@ import yaml
 
 from src.ingestion.producer.datasets.ans_loader import load_policy_events
 from src.ingestion.producer.datasets.base_loader import download_csv
+from src.ingestion.producer.datasets.consent_events import load_consent_events
 from src.ingestion.producer.datasets.regulatory_feeds import (
     load_insurer_a_events,
     load_insurer_b_events,
@@ -30,6 +31,7 @@ SOURCE_LOADERS = {
     "insurer_a": load_insurer_a_events,
     "insurer_b": load_insurer_b_events,
     "insurer_c": load_insurer_c_events,
+    "consent_simulator": load_consent_events,
 }
 
 

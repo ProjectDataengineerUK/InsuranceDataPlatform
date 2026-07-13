@@ -1,0 +1,93 @@
+resources:
+  jobs:
+    open_insurance_bronze_ingest:
+      name: insurance-open-insurance-bronze-ingest-${bundle.target}
+      # Agendado, não contínuo — o workspace trial já bateu em
+      # RESOURCE_EXHAUSTED na cota de serverless com os jobs contínuos
+      # existentes (ver DEFINE_OPEN_INSURANCE.md, Constraints). Consentimento
+      # muda com bem menos frequência que sinistros, não precisa de tempo real.
+      schedule:
+        quartz_cron_expression: "0 */15 * * * ?"
+        timezone_id: "America/Sao_Paulo"
+        pause_status: UNPAUSED
+
+      # Reaproveita bronze_ingest.py sem nenhuma mudança de código — o
+      # trigger(availableNow=True) já embutido nele processa tudo que
+      # chegou desde o último checkpoint e termina, então rodar via
+      # schedule (em vez de continuous) é só configuração de job.
+      tasks:
+        - task_key: bronze_consent_events
+          environment_key: default
+          spark_python_task:
+            python_file: ../src/streaming/bronze_ingest.py
+            parameters:
+              - "--topic"
+              - "consent-updated"
+              - "--bronze-table"
+              - "${var.catalog}.bronze.consent_events"
+              - "--checkpoint-path"
+              - "/Volumes/${var.catalog}/bronze/_checkpoints/consent-updated"
+              - "--required-fields"
+              - "policy_id,consent_status,target_institution"
+
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "2"
+
+    open_insurance_pipeline:
+      name: insurance-open-insurance-pipeline-${bundle.target}
+      schedule:
+        quartz_cron_expression: "0 */30 * * * ?"
+        timezone_id: "America/Sao_Paulo"
+        pause_status: UNPAUSED
+
+      # consent_scd (SCD2) e profile_generator rodam em paralelo (nenhuma
+      # depende da outra); shareable_view depende dos dois, já que junta o
+      # resultado das duas etapas.
+      tasks:
+        - task_key: consent_scd
+          environment_key: default
+          spark_python_task:
+            python_file: ../src/open_insurance/consent_scd.py
+            parameters:
+              - "--bronze-table"
+              - "${var.catalog}.bronze.consent_events"
+              - "--silver-table"
+              - "${var.catalog}.silver.consent_current"
+              - "--results-table"
+              - "${var.catalog}.monitoring._dq_results"
+
+        - task_key: profile_generator
+          environment_key: default
+          spark_python_task:
+            python_file: ../src/open_insurance/profile_generator.py
+            parameters:
+              - "--claims-table"
+              - "${var.catalog}.gold.claims"
+              - "--profile-table"
+              - "${var.catalog}.gold.open_insurance_profile"
+
+        - task_key: shareable_view
+          environment_key: default
+          depends_on:
+            - task_key: consent_scd
+            - task_key: profile_generator
+          spark_python_task:
+            python_file: ../src/open_insurance/shareable_view.py
+            parameters:
+              - "--consent-silver-table"
+              - "${var.catalog}.silver.consent_current"
+              - "--profile-table"
+              - "${var.catalog}.gold.open_insurance_profile"
+              - "--claims-table"
+              - "${var.catalog}.gold.claims"
+              - "--consent-view-table"
+              - "${var.catalog}.gold.customer_consent"
+              - "--shareable-view-table"
+              - "${var.catalog}.gold.open_insurance_shareable"
+
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "2"
