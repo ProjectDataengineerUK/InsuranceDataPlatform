@@ -1,3 +1,5 @@
+import traceback
+
 import streamlit as st
 from queries import (
     build_source_system_volume_query,
@@ -49,6 +51,7 @@ try:
     )
 except Exception as exc:  # noqa: BLE001
     st.error(f"Erro ao consultar contratos: {exc}")
+    st.code(traceback.format_exc())  # diagnóstico temporário, ver docs/ARCHITECTURE.md
 
 st.divider()
 st.subheader("Volume por banco/seguradora")
@@ -59,3 +62,4 @@ try:
     )
 except Exception as exc:  # noqa: BLE001
     st.error(f"Erro ao consultar volume por fonte: {exc}")
+    st.code(traceback.format_exc())  # diagnóstico temporário, ver docs/ARCHITECTURE.md

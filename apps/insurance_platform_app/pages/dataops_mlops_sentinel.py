@@ -1,3 +1,5 @@
+import traceback
+
 import streamlit as st
 from queries import build_dq_results_query, build_model_drift_query, get_connection, run_query
 
@@ -27,6 +29,7 @@ try:
     )
 except Exception as exc:  # noqa: BLE001
     st.error(f"Erro ao consultar qualidade de dados: {exc}")
+    st.code(traceback.format_exc())  # diagnóstico temporário, ver docs/ARCHITECTURE.md
 
 st.divider()
 st.subheader("Drift de features do modelo de fraude")

@@ -1,3 +1,5 @@
+import traceback
+
 import streamlit as st
 from queries import build_fraud_probability_query, build_sla_breach_query, get_connection, run_query
 
@@ -24,6 +26,7 @@ try:
     )
 except Exception as exc:  # noqa: BLE001
     st.error(f"Erro ao consultar probabilidade de fraude: {exc}")
+    st.code(traceback.format_exc())  # diagnóstico temporário, ver docs/ARCHITECTURE.md
 
 st.divider()
 st.subheader("Sinistros fora do SLA (aguardando revisão manual)")
@@ -36,3 +39,4 @@ try:
     )
 except Exception as exc:  # noqa: BLE001
     st.error(f"Erro ao consultar SLA: {exc}")
+    st.code(traceback.format_exc())  # diagnóstico temporário, ver docs/ARCHITECTURE.md
