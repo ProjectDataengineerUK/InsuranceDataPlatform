@@ -71,13 +71,7 @@ targets:
       catalog: insurance_prod
     # Mesmo só com prod rodando (dev já pausado), os 7 jobs contínuos ainda
     # estouram a cota de serverless do workspace trial (RESOURCE_EXHAUSTED
-    # confirmado). Início conservador: só bronze_ingest continua ligado.
-    # silver_transform/fraud_score_stream despausados em 2026-07-13 (sem
-    # eles, gold.claims fica vazia e train_model.py falha com n_samples=0) —
-    # despausar regulatory_bronze_ingest incrementalmente depois de
-    # confirmar que a cota aguenta esses 3 juntos.
-    resources:
-      jobs:
-        regulatory_bronze_ingest:
-          continuous:
-            pause_status: PAUSED
+    # confirmado). bronze_ingest/silver_transform continuous + fraud_score_stream
+    # schedule já estáveis (gold.claims populando de verdade, 2026-07-13).
+    # regulatory_bronze_ingest despausado no mesmo dia — se voltar
+    # RESOURCE_EXHAUSTED, é o primeiro candidato a pausar de novo.
