@@ -29,6 +29,16 @@ def run_consent_scd(
     results_table: str,
 ) -> None:
     spark = get_spark("open-insurance-consent-scd")
+
+    # bronze_ingest.py só cria a tabela quando há pelo menos 1 linha válida
+    # pra escrever (_write_batch) — antes do primeiro evento de consentimento
+    # ser consumido, a tabela ainda não existe. Adia silenciosamente pra
+    # próxima execução agendada, mesmo padrão de degradação graciosa já usado
+    # em shareable_view.py e no resto da plataforma (confirmado em produção:
+    # TABLE_OR_VIEW_NOT_FOUND real neste módulo).
+    if not spark.catalog.tableExists(bronze_table):
+        return
+
     bronze_df: DataFrame = spark.read.table(bronze_table)
 
     if bronze_df.isEmpty():
