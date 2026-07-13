@@ -49,3 +49,9 @@ resources:
         - environment_key: default
           spec:
             environment_version: "2"
+            # confluent-kafka: usado por kafka_lag_reporter.py (commit
+            # administrativo de offsets pra consumer lag monitoring externo,
+            # ver docs/ARCHITECTURE.md) — não vem por padrão no ambiente
+            # serverless.
+            dependencies:
+              - confluent-kafka==2.5.0

@@ -39,28 +39,29 @@ resource "databricks_secret" "sla_webhook_url" {
 }
 
 resource "databricks_secret" "confluent_metrics_api_key" {
-  # Sem count por valor-vazio (diferente de sla_webhook_url): o app Databricks
-  # referencia esse secret por nome fixo em resources/visualization.yml — se o
-  # recurso não existisse quando var.confluent_metrics_api_key == "", o
-  # `databricks bundle deploy` do app quebraria por secret inexistente.
-  # Criar sempre (com string_value vazia até o usuário configurar o GitHub
-  # secret CONFLUENT_METRICS_API_KEY) e deixar confluent_metrics.is_configured()
-  # tratar "" como não configurado.
-  count        = var.environment == "dev" ? 1 : 0
+  # Mesmo padrão condicional de sla_webhook_url: o provider Databricks rejeita
+  # string_value vazio (confirmado num apply real: "expected string_value to
+  # not be an empty string"), então "criar sempre, mesmo vazio" não é viável.
+  # Consequência real: o app em resources/visualization.yml referencia este
+  # secret por nome fixo — os 3 GitHub secrets (CONFLUENT_METRICS_API_KEY/
+  # SECRET/CONFLUENT_CLUSTER_ID) precisam existir com valor real ANTES do
+  # primeiro deploy que inclui essa seção do app, senão o bundle deploy quebra
+  # por secret inexistente (não por credencial ausente).
+  count        = var.environment == "dev" && var.confluent_metrics_api_key != "" ? 1 : 0
   scope        = databricks_secret_scope.insurance_platform[0].name
   key          = "confluent-metrics-api-key"
   string_value = var.confluent_metrics_api_key
 }
 
 resource "databricks_secret" "confluent_metrics_api_secret" {
-  count        = var.environment == "dev" ? 1 : 0
+  count        = var.environment == "dev" && var.confluent_metrics_api_secret != "" ? 1 : 0
   scope        = databricks_secret_scope.insurance_platform[0].name
   key          = "confluent-metrics-api-secret"
   string_value = var.confluent_metrics_api_secret
 }
 
 resource "databricks_secret" "confluent_cluster_id" {
-  count        = var.environment == "dev" ? 1 : 0
+  count        = var.environment == "dev" && var.confluent_cluster_id != "" ? 1 : 0
   scope        = databricks_secret_scope.insurance_platform[0].name
   key          = "confluent-cluster-id"
   string_value = var.confluent_cluster_id

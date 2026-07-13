@@ -12,11 +12,13 @@ sys.path.insert(0, str(Path(_this_file).resolve().parents[2]))
 
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import col, current_timestamp, from_json, lit
+from pyspark.sql.functions import max as spark_max
 from pyspark.sql.streaming import StreamingQuery
 
 from src.common.kafka_config import get_kafka_options
 from src.common.schemas import SCHEMA_REGISTRY
 from src.common.spark_session import get_spark
+from src.streaming.kafka_lag_reporter import report_offsets
 
 DEFAULT_REQUIRED_FIELDS = ["event_type", "event_timestamp"]
 
@@ -27,6 +29,12 @@ def _parse_events(raw_stream: DataFrame, schema) -> DataFrame:
         col("value").cast("string").alias("raw_value"),
         from_json(col("value").cast("string"), schema).alias("payload"),
         col("timestamp").alias("kafka_timestamp"),
+        # partition/offset nunca são persistidos no Bronze (os .select(...)
+        # abaixo em _write_batch listam colunas explícitas) — servem só pra
+        # calcular o offset processado por partição e reportar pro
+        # kafka_lag_reporter, pra consumer lag aparecer na Metrics API.
+        col("partition"),
+        col("offset"),
     ).withColumn("_ingested_at", current_timestamp())
 
 
@@ -38,7 +46,7 @@ def _is_malformed(parsed_df: DataFrame, required_fields: list[str]) -> DataFrame
 
 
 def _write_batch(
-    batch_df: DataFrame, batch_id: int, bronze_table: str, required_fields: list[str]
+    batch_df: DataFrame, batch_id: int, bronze_table: str, required_fields: list[str], topic: str
 ) -> None:
     malformed = _is_malformed(batch_df, required_fields)
 
@@ -71,6 +79,10 @@ def _write_batch(
             .saveAsTable(f"{bronze_table}_quarantine")
         )
 
+    offset_rows = batch_df.groupBy("partition").agg(spark_max("offset").alias("max_offset")).collect()
+    partition_offsets = {row["partition"]: row["max_offset"] for row in offset_rows}
+    report_offsets(topic, group_id=f"databricks-bronze-{topic}", partition_offsets=partition_offsets)
+
 
 def run_bronze_ingest(
     topic: str,
@@ -93,7 +105,7 @@ def run_bronze_ingest(
     return (
         parsed_stream.writeStream.foreachBatch(
             lambda batch_df, batch_id: _write_batch(
-                batch_df, batch_id, bronze_table, effective_required_fields
+                batch_df, batch_id, bronze_table, effective_required_fields, topic
             )
         )
         .option("checkpointLocation", checkpoint_path)

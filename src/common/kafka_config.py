@@ -42,3 +42,23 @@ def get_kafka_options(topic: str, secret_scope: str = "insurance-platform") -> d
         "startingOffsets": "earliest",
         "failOnDataLoss": "false",
     }
+
+
+def get_admin_client_config(secret_scope: str = "insurance-platform") -> dict:
+    # Config nativa do confluent_kafka (librdkafka), não do conector Kafka do
+    # Spark (get_kafka_options acima) — usada por kafka_lag_reporter.py pra
+    # fazer commit administrativo de offsets num consumer group real, fora do
+    # Spark Structured Streaming.
+    bootstrap_servers = _get_secret(
+        secret_scope, "confluent-bootstrap-servers", "CONFLUENT_BOOTSTRAP_SERVERS"
+    )
+    api_key = _get_secret(secret_scope, "confluent-api-key", "CONFLUENT_API_KEY")
+    api_secret = _get_secret(secret_scope, "confluent-api-secret", "CONFLUENT_API_SECRET")
+
+    return {
+        "bootstrap.servers": bootstrap_servers,
+        "security.protocol": "SASL_SSL",
+        "sasl.mechanisms": "PLAIN",
+        "sasl.username": api_key,
+        "sasl.password": api_secret,
+    }

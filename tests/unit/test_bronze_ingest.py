@@ -4,8 +4,8 @@ from src.streaming.bronze_ingest import DEFAULT_REQUIRED_FIELDS, _is_malformed, 
 
 def test_malformed_json_is_flagged(spark):
     raw_df = spark.createDataFrame(
-        [("k1", "not valid json", 1), ("k2", '{"claim_id": null}', 2)],
-        ["key", "value", "timestamp"],
+        [("k1", "not valid json", 1, 0, 10), ("k2", '{"claim_id": null}', 2, 0, 11)],
+        ["key", "value", "timestamp", "partition", "offset"],
     )
 
     parsed = _parse_events(raw_df, CLAIM_EVENT_SCHEMA)
@@ -26,7 +26,9 @@ def test_valid_event_is_not_flagged(spark):
         '"event_type": "claim-opened", "event_timestamp": "2026-01-01T10:00:00", '
         '"amount": 100.0, "region": "SP", "vehicle_type": "carro", "source": "susep"}'
     )
-    raw_df = spark.createDataFrame([("k1", valid_json, 1)], ["key", "value", "timestamp"])
+    raw_df = spark.createDataFrame(
+        [("k1", valid_json, 1, 0, 10)], ["key", "value", "timestamp", "partition", "offset"]
+    )
 
     parsed = _parse_events(raw_df, CLAIM_EVENT_SCHEMA)
     result = parsed.withColumn(
@@ -49,8 +51,8 @@ def test_is_malformed_with_empty_required_fields_never_flags_anything(spark):
     # nunca uma lista vazia; este teste documenta esse limite, não valida um
     # uso de produção.
     raw_df = spark.createDataFrame(
-        [("k1", "not valid json", 1), ("k2", '{"claim_id": null}', 2)],
-        ["key", "value", "timestamp"],
+        [("k1", "not valid json", 1, 0, 10), ("k2", '{"claim_id": null}', 2, 0, 11)],
+        ["key", "value", "timestamp", "partition", "offset"],
     )
 
     parsed = _parse_events(raw_df, CLAIM_EVENT_SCHEMA)
