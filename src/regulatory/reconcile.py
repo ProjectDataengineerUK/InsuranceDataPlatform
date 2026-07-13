@@ -45,8 +45,29 @@ def reconcile_claims(rows: list[dict], active_sources: set[str]) -> list[Reconci
     results = []
 
     for external_reference_id, claim_rows in by_claim.items():
-        amounts = [float(row["amount"]) for row in claim_rows]
+        # amount pode ser NULL (try_cast em standardize.py vira NULL pra
+        # entrada malformada, ver docs/ARCHITECTURE.md) — uma fonte com
+        # amount ausente ainda conta pra missing_in_source, mas não entra
+        # na comparação de valor (não há o que comparar).
+        amounts = [float(row["amount"]) for row in claim_rows if row["amount"] is not None]
         sources_reporting = sorted({row["source_system"] for row in claim_rows})
+
+        if not amounts:
+            missing_sources = active_sources - set(sources_reporting)
+            if missing_sources:
+                results.append(
+                    ReconciliationResult(
+                        external_reference_id=external_reference_id,
+                        discrepancy_type="missing_in_source",
+                        sources_reporting=sources_reporting,
+                        min_amount=0.0,
+                        max_amount=0.0,
+                        resolved_amount=0.0,
+                        detected_at=detected_at,
+                    )
+                )
+            continue
+
         min_amount = min(amounts)
         max_amount = max(amounts)
         # MVP: mediana das fontes é a resolução de conflito — robusta a uma
