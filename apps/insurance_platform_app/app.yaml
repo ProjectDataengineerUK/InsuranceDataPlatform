@@ -11,3 +11,9 @@ env:
     value: "insurance_prod"
   - name: LOG_LEVEL
     value: "info"
+  - name: CONFLUENT_METRICS_API_KEY
+    valueFrom: confluent-metrics-api-key
+  - name: CONFLUENT_METRICS_API_SECRET
+    valueFrom: confluent-metrics-api-secret
+  - name: CONFLUENT_CLUSTER_ID
+    valueFrom: confluent-cluster-id

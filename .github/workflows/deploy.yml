@@ -40,6 +40,13 @@ jobs:
           # o databricks_secret (var.sla_webhook_url != "" ? 1 : 0); sla_alerts.py
           # e model_drift.py já caem no fallback de log nesse caso.
           TF_VAR_sla_webhook_url: ${{ secrets.SLA_WEBHOOK_URL }}
+          # Opcionais — Cloud API Key de CONTA (Metrics API, página Performance),
+          # diferentes da API Key de CLUSTER acima. Sem esses secrets no GitHub,
+          # ficam "" e a seção de consumer lag/partition skew no app mostra
+          # "não configurado" (ver confluent_metrics.py::is_configured).
+          TF_VAR_confluent_metrics_api_key: ${{ secrets.CONFLUENT_METRICS_API_KEY }}
+          TF_VAR_confluent_metrics_api_secret: ${{ secrets.CONFLUENT_METRICS_API_SECRET }}
+          TF_VAR_confluent_cluster_id: ${{ secrets.CONFLUENT_CLUSTER_ID }}
         run: |
           terraform init
           terraform import databricks_catalog.insurance "insurance_${TF_VAR_environment}" || true

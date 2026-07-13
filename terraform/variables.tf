@@ -69,3 +69,30 @@ variable "sla_webhook_url" {
   sensitive   = true
   default     = ""
 }
+
+variable "confluent_metrics_api_key" {
+  description = <<-EOT
+    Cloud API Key de CONTA do Confluent Cloud (escopo "Global"), usada só pela
+    Metrics API (apps/insurance_platform_app/confluent_metrics.py) — diferente
+    da API Key de CLUSTER (var.confluent_api_key) que o producer usa pra
+    publicar eventos. Opcional: vazio desabilita a seção de consumer
+    lag/partition skew na página Performance (confluent_metrics.is_configured()
+    retorna False para string vazia).
+  EOT
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "confluent_metrics_api_secret" {
+  description = "API Secret correspondente a var.confluent_metrics_api_key."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "confluent_cluster_id" {
+  description = "ID do cluster Kafka no Confluent Cloud (formato lkc-xxxxx), usado como filtro na Metrics API. Não é sensível, mas segue o mesmo secret scope pelas mesmas razões operacionais (injeção no app via valueFrom)."
+  type        = string
+  default     = ""
+}

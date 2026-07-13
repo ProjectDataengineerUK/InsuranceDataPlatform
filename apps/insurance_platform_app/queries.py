@@ -164,16 +164,19 @@ def build_table_freshness_query(table: str, timestamp_column: str) -> SqlQuery:
     return SqlQuery(sql=f"SELECT MAX({timestamp_column}) AS latest_ts FROM {table}", params={})
 
 
-def build_quarantine_rate_query(bronze_table: str) -> SqlQuery:
-    # bronze_table vem sempre de constante interna (ver pages/performance.py),
-    # nunca de input do usuário — mesma ressalva de build_table_freshness_query.
-    return SqlQuery(
-        sql=(
-            f"SELECT (SELECT COUNT(*) FROM {bronze_table}) AS valid_count, "
-            f"(SELECT COUNT(*) FROM {bronze_table}_quarantine) AS quarantine_count"
-        ),
-        params={},
-    )
+def build_table_count_query(table: str) -> SqlQuery:
+    # table vem sempre de constante interna (ver pages/performance.py), nunca
+    # de input do usuário — mesma ressalva de build_table_freshness_query.
+    # Contagens de valid_count/quarantine_count são consultadas SEPARADAMENTE
+    # (não num único SELECT com 2 subqueries) porque bronze.<table>_quarantine
+    # só é criada no primeiro evento malformado (ver
+    # bronze_ingest.py::_write_batch) — um tópico saudável sem nenhum registro
+    # quarentenado nunca cria essa tabela. Um único SQL com as duas subqueries
+    # falhava inteiro com TABLE_OR_VIEW_NOT_FOUND por causa só da quarentena
+    # ausente, mascarando o valid_count real (confirmado em produção: os 4
+    # tópicos apareciam como "sem dados ainda" mesmo com bronze.claims/etc
+    # populados de verdade).
+    return SqlQuery(sql=f"SELECT COUNT(*) AS total FROM {table}", params={})
 
 
 def get_connection():

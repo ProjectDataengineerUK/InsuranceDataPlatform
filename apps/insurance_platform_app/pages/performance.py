@@ -1,9 +1,10 @@
 import json
 
 import streamlit as st
+from confluent_metrics import fetch_consumer_lag, fetch_partition_throughput, is_configured
 from queries import (
     build_pipeline_latency_query,
-    build_quarantine_rate_query,
+    build_table_count_query,
     get_connection,
     run_query,
 )
@@ -33,39 +34,41 @@ except Exception as exc:  # noqa: BLE001
 st.subheader("Taxa de quarentena por tópico")
 quarantine_rows = []
 for topic, bronze_table in BRONZE_TABLES:
+    row: dict = {"topic": topic, "valid_count": None, "quarantine_count": None, "quarantine_rate_pct": None}
+
     try:
-        result = run_query(connection, build_quarantine_rate_query(bronze_table))[0]
-        valid_count = result["valid_count"] or 0
-        quarantine_count = result["quarantine_count"] or 0
-        total = valid_count + quarantine_count
-        rate = (quarantine_count / total * 100) if total else 0.0
-        quarantine_rows.append(
-            {
-                "topic": topic,
-                "valid_count": valid_count,
-                "quarantine_count": quarantine_count,
-                "quarantine_rate_pct": round(rate, 2),
-            }
-        )
+        row["valid_count"] = run_query(connection, build_table_count_query(bronze_table))[0]["total"] or 0
     except Exception as exc:  # noqa: BLE001
-        # bronze.<table>/bronze.<table>_quarantine só existem depois do
-        # primeiro evento válido/malformado daquele tópico (bronze_ingest.py
-        # só escreve — e cria a tabela — quando há pelo menos 1 linha),
-        # então TABLE_OR_VIEW_NOT_FOUND aqui é "sem dados ainda", não erro.
-        message = (
-            "Sem dados ainda (tabela criada só após o primeiro evento do tópico)"
+        # bronze.<table> só existe depois do primeiro evento válido do tópico
+        # (bronze_ingest.py só escreve — e cria a tabela — quando há pelo
+        # menos 1 linha), então TABLE_OR_VIEW_NOT_FOUND aqui é "sem dados
+        # ainda", não erro.
+        row["error"] = (
+            "Sem dados válidos ainda (tabela criada só após o primeiro evento do tópico)"
             if "TABLE_OR_VIEW_NOT_FOUND" in str(exc)
             else str(exc)
         )
-        quarantine_rows.append(
-            {
-                "topic": topic,
-                "valid_count": None,
-                "quarantine_count": None,
-                "quarantine_rate_pct": None,
-                "error": message,
-            }
+
+    try:
+        row["quarantine_count"] = (
+            run_query(connection, build_table_count_query(f"{bronze_table}_quarantine"))[0]["total"] or 0
         )
+    except Exception as exc:  # noqa: BLE001
+        # bronze.<table>_quarantine só é criada no primeiro evento MALFORMADO
+        # — um tópico saudável, sem nenhum registro quarentenado, nunca cria
+        # essa tabela. Tratado à parte de valid_count (consultas separadas em
+        # build_table_count_query) pra essa ausência não mascarar contagem
+        # válida real como "sem dados".
+        if "TABLE_OR_VIEW_NOT_FOUND" in str(exc):
+            row["quarantine_count"] = 0
+        else:
+            row["error"] = str(exc)
+
+    if row["valid_count"] is not None and row["quarantine_count"] is not None:
+        total = row["valid_count"] + row["quarantine_count"]
+        row["quarantine_rate_pct"] = round(row["quarantine_count"] / total * 100, 2) if total else 0.0
+
+    quarantine_rows.append(row)
 
 st.dataframe(quarantine_rows, use_container_width=True)
 
@@ -93,8 +96,30 @@ except Exception as exc:  # noqa: BLE001
     st.error(f"Erro ao consultar throughput: {exc}")
 
 st.divider()
-st.info(
-    "Fora de escopo ainda: métricas nativas do Confluent Cloud (consumer lag, "
-    "partition skew) — este painel só reflete o que os próprios jobs Spark "
-    "medem no Bronze, não a API de métricas do Kafka. Fica como melhoria futura."
-)
+st.subheader("Consumer lag e partition skew (Confluent Cloud, nativo)")
+if not is_configured():
+    st.info(
+        "Não configurado — requer CONFLUENT_METRICS_API_KEY/SECRET (Cloud API Key de "
+        "conta, diferente da API Key de cluster já usada pelo producer) e "
+        "CONFLUENT_CLUSTER_ID. Ver docs/ARCHITECTURE.md."
+    )
+else:
+    try:
+        lag_rows = fetch_consumer_lag()
+        if lag_rows:
+            st.caption("Consumer lag por grupo/tópico/partição (últimos 15 min, máximo)")
+            st.dataframe(lag_rows, use_container_width=True)
+        else:
+            st.info("Nenhum consumer group ativo com lag registrado na janela.")
+    except Exception as exc:  # noqa: BLE001
+        st.error(f"Erro ao consultar consumer lag: {exc}")
+
+    try:
+        throughput_rows = fetch_partition_throughput()
+        if throughput_rows:
+            st.caption("Bytes recebidos por partição (proxy de partition skew, últimos 15 min)")
+            st.dataframe(throughput_rows, use_container_width=True)
+        else:
+            st.info("Nenhum dado de throughput por partição na janela.")
+    except Exception as exc:  # noqa: BLE001
+        st.error(f"Erro ao consultar throughput por partição: {exc}")

@@ -11,12 +11,12 @@ from queries import (
     build_fraud_probability_query,
     build_model_drift_query,
     build_pipeline_latency_query,
-    build_quarantine_rate_query,
     build_reconciliation_query,
     build_sla_breach_query,
     build_source_system_volume_query,
     build_susep_claims_query,
     build_susep_compliance_summary_query,
+    build_table_count_query,
     build_table_freshness_query,
 )
 
@@ -119,9 +119,8 @@ def test_build_table_freshness_query():
     assert query.params == {}
 
 
-def test_build_quarantine_rate_query():
-    query = build_quarantine_rate_query("bronze.claims")
+def test_build_table_count_query():
+    query = build_table_count_query("bronze.claims_quarantine")
 
-    assert "bronze.claims_quarantine" in query.sql
-    assert "bronze.claims" in query.sql
+    assert query.sql == "SELECT COUNT(*) AS total FROM bronze.claims_quarantine"
     assert query.params == {}

@@ -30,3 +30,25 @@ targets:
                 # primeiro deploy real, já que só CAN_MANAGE foi confirmado
                 # em exemplo oficial durante o Design.
                 permission: "CAN_USE"
+            # Metrics API do Confluent Cloud (consumer lag/partition skew na
+            # página Performance) — os 3 secrets são criados sempre (mesmo com
+            # string_value vazia) em terraform/secrets.tf, então essa
+            # declaração nunca referencia um secret inexistente mesmo antes do
+            # usuário configurar os GitHub secrets correspondentes. Schema do
+            # tipo `secret` (scope/key/permission) ainda não confirmado num
+            # deploy real — mesma ressalva já feita acima pro sql-warehouse.
+            - name: "confluent-metrics-api-key"
+              secret:
+                scope: "insurance-platform"
+                key: "confluent-metrics-api-key"
+                permission: "READ"
+            - name: "confluent-metrics-api-secret"
+              secret:
+                scope: "insurance-platform"
+                key: "confluent-metrics-api-secret"
+                permission: "READ"
+            - name: "confluent-cluster-id"
+              secret:
+                scope: "insurance-platform"
+                key: "confluent-cluster-id"
+                permission: "READ"
