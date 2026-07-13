@@ -22,7 +22,12 @@ variable "environment" {
 variable "catalog_owner" {
   description = "Grupo ou usuário owner do catálogo Unity Catalog"
   type        = string
-  default     = "account users"
+  # "account users" exige que o grupo esteja atribuído ao workspace (Account
+  # Console > Workspaces > Permissions) — passo ainda não feito no workspace
+  # novo. Usando o e-mail do único usuário até um grupo de equipe existir de
+  # verdade (ver docs/ARCHITECTURE.md sobre grupos regionais ainda não
+  # provisionados).
+  default = "jonataslimacostabr@gmail.com"
 }
 
 variable "confluent_bootstrap_servers" {
