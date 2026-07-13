@@ -41,4 +41,11 @@ try:
     else:
         st.info("Nenhuma checagem de drift registrada ainda.")
 except Exception as exc:  # noqa: BLE001
-    st.error(f"Erro ao consultar drift do modelo: {exc}")
+    # monitoring._model_drift_results só é criada quando model_drift_monitor
+    # roda com uma baseline já escrita (train_model.py só escreve baseline
+    # quando promove um champion) — antes do primeiro champion promovido,
+    # TABLE_OR_VIEW_NOT_FOUND aqui é "sem dados ainda", não erro.
+    if "TABLE_OR_VIEW_NOT_FOUND" in str(exc):
+        st.info("Nenhuma checagem de drift registrada ainda (aguardando o primeiro modelo campeão promovido).")
+    else:
+        st.error(f"Erro ao consultar drift do modelo: {exc}")

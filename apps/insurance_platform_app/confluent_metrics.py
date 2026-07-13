@@ -33,7 +33,12 @@ def _query_metric(
     api_secret = os.environ["CONFLUENT_METRICS_API_SECRET"]
     cluster_id = os.environ["CONFLUENT_CLUSTER_ID"]
 
-    now = datetime.now(UTC).replace(microsecond=0)
+    # granularity PT1M exige intervalo alinhado ao minuto (segundos=0) — um
+    # `now` com segundos residuais (ex.: 22:22:47) fazia a API recusar o
+    # request inteiro com 400 Bad Request antes mesmo de avaliar os filtros.
+    # Formato de timestamp também precisa terminar em "Z" literal — o
+    # `.isoformat()" padrão do Python produz "+00:00", que a API não aceita.
+    now = datetime.now(UTC).replace(second=0, microsecond=0)
     start = now - timedelta(minutes=lookback_minutes)
     body = {
         "aggregations": [{"metric": metric, "agg": "MAX"}],
@@ -43,7 +48,9 @@ def _query_metric(
         },
         "group_by": group_by,
         "granularity": "PT1M",
-        "intervals": [f"{start.isoformat()}/{now.isoformat()}"],
+        "intervals": [
+            f"{start.strftime('%Y-%m-%dT%H:%M:%SZ')}/{now.strftime('%Y-%m-%dT%H:%M:%SZ')}"
+        ],
     }
     response = requests.post(
         METRICS_API_URL,
@@ -51,7 +58,15 @@ def _query_metric(
         auth=(api_key, api_secret),
         timeout=15,
     )
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+    except requests.HTTPError as exc:
+        # A mensagem padrão de requests ("400 Client Error: Bad Request for
+        # url: ...") não inclui o corpo da resposta, onde o Confluent Cloud
+        # explica o motivo real (ex.: campo de filtro inválido, métrica
+        # incompatível com a granularidade) — anexar aqui evita ter que
+        # instrumentar de novo na próxima vez que a API rejeitar um request.
+        raise requests.HTTPError(f"{exc} — resposta da API: {response.text}", response=response) from exc
     return response.json().get("data", [])
 
 
