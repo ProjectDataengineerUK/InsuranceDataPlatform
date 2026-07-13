@@ -41,6 +41,6 @@ resource "databricks_secret" "sla_webhook_url" {
 resource "databricks_secret_acl" "insurance_platform_read" {
   count      = var.environment == "dev" ? 1 : 0
   scope      = databricks_secret_scope.insurance_platform[0].name
-  principal  = var.catalog_owner
+  principal  = var.secrets_acl_principal
   permission = "READ"
 }

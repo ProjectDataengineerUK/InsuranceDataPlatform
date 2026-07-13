@@ -20,13 +20,28 @@ variable "environment" {
 }
 
 variable "catalog_owner" {
-  description = "Grupo ou usuário owner do catálogo Unity Catalog"
-  type        = string
-  # "account users" exige que o grupo esteja atribuído ao workspace (Account
-  # Console > Workspaces > Permissions) — passo ainda não feito no workspace
-  # novo. Usando o e-mail do único usuário até um grupo de equipe existir de
-  # verdade (ver docs/ARCHITECTURE.md sobre grupos regionais ainda não
-  # provisionados).
+  description = "Grupo ou usuário owner do catálogo Unity Catalog e alvo dos grants de schema/volume"
+  # "account users" é um principal de conta/metastore — funciona para grants
+  # de Unity Catalog (catalog owner, schema/volume grants) SEM precisar estar
+  # atribuído ao workspace, e cobre implicitamente o service principal do
+  # Databricks App (confirmado: trocar isso pelo e-mail de um usuário
+  # específico quebrou USE CATALOG para o app numa execução real —
+  # INSUFFICIENT_PERMISSIONS, ver docs/ARCHITECTURE.md). Reservado
+  # exclusivamente para esse propósito — não usar para o Secret ACL
+  # (ver var.secrets_acl_principal).
+  type    = string
+  default = "account users"
+}
+
+variable "secrets_acl_principal" {
+  description = "Principal com READ no secret scope insurance-platform (recurso de workspace, não de catálogo)"
+  # Secret ACL é um recurso de WORKSPACE (API legada de permissions), não de
+  # metastore/conta — precisa de um principal já reconhecido no workspace.
+  # "account users" falha aqui com "User or Group account users does not
+  # exist" enquanto o grupo não for atribuído ao workspace (Account Console >
+  # Workspaces > Permissions, ainda não feito neste workspace novo) — usando
+  # o e-mail do único usuário até isso ser resolvido.
+  type    = string
   default = "jonataslimacostabr@gmail.com"
 }
 
