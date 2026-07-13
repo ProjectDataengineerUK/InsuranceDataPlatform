@@ -144,7 +144,17 @@ def run_fraud_scoring_stream(
     experiment_name: str | None = None,
 ) -> StreamingQuery:
     spark: SparkSession = get_spark(f"fraud-scoring-stream-{gold_claims_table}")
-    silver_stream = spark.readStream.format("delta").table(silver_table)
+    # silver_transform.py escreve em silver.claims via MERGE
+    # (whenMatchedUpdateAll/whenNotMatchedInsertAll), não só append — o Delta
+    # Streaming Source por padrão não processa uma tabela de origem que
+    # recebe updates/merges sem essa opção explícita (confirmado em
+    # produção: job "Bem-sucedida" processando 0 linhas mesmo com 35133 já
+    # em silver.claims). ignoreChanges reprocessa arquivos reescritos pelo
+    # MERGE como novas linhas — merge_into_delta (mais abaixo, key_column)
+    # já deduplica por claim_id no Gold, então reprocessamento é idempotente.
+    silver_stream = (
+        spark.readStream.format("delta").option("ignoreChanges", "true").table(silver_table)
+    )
 
     # Carregado uma vez por run do job (não por micro-batch) — evita recarregar
     # o modelo a cada foreachBatch; um champion novo só é pego no próximo
