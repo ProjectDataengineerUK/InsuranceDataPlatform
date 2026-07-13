@@ -11,7 +11,7 @@ _this_file = globals().get("__file__") or sys._getframe().f_code.co_filename
 sys.path.insert(0, str(Path(_this_file).resolve().parents[2]))
 
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col, from_unixtime, regexp_replace, to_timestamp
+from pyspark.sql.functions import col, expr, from_unixtime, regexp_replace, to_timestamp
 from pyspark.sql.types import DecimalType
 
 from src.common.delta_write import append_or_create
@@ -47,14 +47,23 @@ def _standardize_insurer_a(raw_df: DataFrame) -> DataFrame:
     amount_clean = regexp_replace(col("valor_indenizacao"), r"R\$\s*", "")
     amount_clean = regexp_replace(amount_clean, r"\.", "")
     amount_clean = regexp_replace(amount_clean, ",", ".")
-    return subset.select(
-        col("external_reference_id"),
-        col("source_system"),
-        col("numero_apolice").alias("policy_id"),
-        to_timestamp(col("data_ocorrencia"), "dd/MM/yyyy").alias("event_timestamp"),
-        amount_clean.cast(DecimalType(18, 2)).alias("amount"),
-        col("regiao_sinistro").alias("region"),
-        col("codigo_causa").cast("int").alias("cause_code"),
+    return (
+        subset.withColumn("_amount_clean", amount_clean)
+        .select(
+            col("external_reference_id"),
+            col("source_system"),
+            col("numero_apolice").alias("policy_id"),
+            to_timestamp(col("data_ocorrencia"), "dd/MM/yyyy").alias("event_timestamp"),
+            # try_cast em vez de cast: um "NaN" já gravado no Bronze (bug de
+            # serialização já corrigido em kafka_publisher.py, mas linhas
+            # antigas continuam lá pra sempre já que este job relê a tabela
+            # inteira) vira NULL em vez de derrubar o job inteiro
+            # (CAST_INVALID_INPUT confirmado em produção). NULL já é
+            # capturado por check_not_null como falha de DQ, não como crash.
+            expr("try_cast(_amount_clean AS DECIMAL(18,2))").alias("amount"),
+            col("regiao_sinistro").alias("region"),
+            col("codigo_causa").cast("int").alias("cause_code"),
+        )
     )
 
 
@@ -65,7 +74,7 @@ def _standardize_insurer_b(raw_df: DataFrame) -> DataFrame:
         col("source_system"),
         col("POLICY_NUM").alias("policy_id"),
         to_timestamp(col("EVENT_DATE"), "yyyy-MM-dd").alias("event_timestamp"),
-        col("CLAIM_AMOUNT").cast(DecimalType(18, 2)).alias("amount"),
+        expr("try_cast(CLAIM_AMOUNT AS DECIMAL(18,2))").alias("amount"),
         col("REGION_CODE").alias("region"),
         col("CAUSE_CD").cast("int").alias("cause_code"),
     )
@@ -80,14 +89,16 @@ def _standardize_insurer_c(raw_df: DataFrame) -> DataFrame:
     # (confirmado em produção: CAST_INVALID_INPUT). cast("double") primeiro
     # aceita notação científica; convertendo pra long depois é exato nessas
     # faixas de valor (bem abaixo do limite de precisão de um double).
+    # try_cast (não cast) pro mesmo motivo do insurer_a/b: um "NaN" já
+    # gravado no Bronze vira NULL em vez de derrubar o job inteiro.
     return subset.select(
         col("external_reference_id"),
         col("source_system"),
         col("policyId").alias("policy_id"),
-        from_unixtime(col("occurrenceDate").cast("double").cast("long") / 1000)
+        from_unixtime(expr("try_cast(occurrenceDate AS DOUBLE)").cast("long") / 1000)
         .cast("timestamp")
         .alias("event_timestamp"),
-        (col("amountCents").cast("double").cast("long") / 100.0)
+        (expr("try_cast(amountCents AS DOUBLE)").cast("long") / 100.0)
         .cast(DecimalType(18, 2))
         .alias("amount"),
         col("regionCode").alias("region"),

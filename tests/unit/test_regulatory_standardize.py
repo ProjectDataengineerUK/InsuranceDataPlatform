@@ -95,6 +95,51 @@ def test_standardizes_insurer_c_row(spark):
     assert result["cause_code"] == 9
 
 
+def test_malformed_nan_amount_becomes_null_not_a_crash(spark):
+    # Reproduz o CAST_INVALID_INPUT real de produção: um "NaN" (token JSON
+    # inválido gerado por um bug já corrigido em kafka_publisher.py, mas que
+    # já ficou gravado no Bronze antes do fix) não pode mais derrubar o job
+    # inteiro — try_cast deve virar NULL, capturável por check_not_null.
+    raw_df = spark.createDataFrame(
+        [
+            _raw_row(
+                external_reference_id="ref5",
+                source_system="insurer_a",
+                numero_apolice="111",
+                data_ocorrencia="04/05/2020",
+                valor_indenizacao="NaN",
+                regiao_sinistro="SP",
+                codigo_causa="6",
+            ),
+            _raw_row(
+                external_reference_id="ref6",
+                source_system="insurer_b",
+                POLICY_NUM="222",
+                EVENT_DATE="2020-06-01",
+                CLAIM_AMOUNT="NaN",
+                REGION_CODE="RJ",
+                CAUSE_CD="4",
+            ),
+            _raw_row(
+                external_reference_id="ref7",
+                source_system="insurer_c",
+                policyId="333",
+                occurrenceDate=f"{float(int(datetime(2020, 7, 1).timestamp() * 1000)):.12E}",
+                amountCents="NaN",
+                regionCode="MG",
+                causeCode="9",
+            ),
+        ],
+        schema=REGULATORY_CLAIM_RAW_SCHEMA,
+    )
+
+    result = {row["external_reference_id"]: row for row in standardize_regulatory_claims(raw_df).collect()}
+
+    assert result["ref5"]["amount"] is None
+    assert result["ref6"]["amount"] is None
+    assert result["ref7"]["amount"] is None
+
+
 def test_invalid_cause_code_caught_by_allowed_values_check(spark):
     raw_df = spark.createDataFrame(
         [
