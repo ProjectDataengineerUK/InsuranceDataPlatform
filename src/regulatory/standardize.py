@@ -11,7 +11,7 @@ _this_file = globals().get("__file__") or sys._getframe().f_code.co_filename
 sys.path.insert(0, str(Path(_this_file).resolve().parents[2]))
 
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col, expr, from_unixtime, regexp_replace, to_timestamp
+from pyspark.sql.functions import col, expr, from_unixtime, lit, nanvl, regexp_replace, to_timestamp
 from pyspark.sql.types import DecimalType
 
 from src.common.delta_write import append_or_create
@@ -90,17 +90,23 @@ def _standardize_insurer_c(raw_df: DataFrame) -> DataFrame:
     # aceita notação científica; convertendo pra long depois é exato nessas
     # faixas de valor (bem abaixo do limite de precisão de um double).
     # try_cast (não cast) pro mesmo motivo do insurer_a/b: um "NaN" já
-    # gravado no Bronze vira NULL em vez de derrubar o job inteiro.
+    # gravado no Bronze vira NULL em vez de derrubar o job inteiro. Diferente
+    # de DECIMAL, DOUBLE aceita "NaN" como valor legítimo (IEEE-754) — o
+    # try_cast sozinho NÃO vira NULL aqui (confirmado em teste real: virava
+    # Decimal('0.00'), já que NaN.cast("long") é 0 em Java/Scala) — nanvl()
+    # troca NaN por NULL explicitamente antes do cast pra long.
+    occurrence_date_double = nanvl(
+        expr("try_cast(occurrenceDate AS DOUBLE)"), lit(None).cast("double")
+    )
+    amount_cents_double = nanvl(expr("try_cast(amountCents AS DOUBLE)"), lit(None).cast("double"))
     return subset.select(
         col("external_reference_id"),
         col("source_system"),
         col("policyId").alias("policy_id"),
-        from_unixtime(expr("try_cast(occurrenceDate AS DOUBLE)").cast("long") / 1000)
+        from_unixtime(occurrence_date_double.cast("long") / 1000)
         .cast("timestamp")
         .alias("event_timestamp"),
-        (expr("try_cast(amountCents AS DOUBLE)").cast("long") / 100.0)
-        .cast(DecimalType(18, 2))
-        .alias("amount"),
+        (amount_cents_double.cast("long") / 100.0).cast(DecimalType(18, 2)).alias("amount"),
         col("regionCode").alias("region"),
         col("causeCode").cast("int").alias("cause_code"),
     )
