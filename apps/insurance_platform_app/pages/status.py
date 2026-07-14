@@ -8,13 +8,11 @@ from health import (
     count_threshold_status,
     drift_status,
     freshness_status,
-    sla_status,
     table_exists_status,
 )
 from queries import (
     build_dq_results_query,
     build_model_drift_query,
-    build_pipeline_latency_query,
     build_reconciliation_query,
     build_sla_breach_query,
     build_susep_compliance_summary_query,
