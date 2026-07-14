@@ -3,3 +3,4 @@ databricks-sql-connector
 databricks-sdk
 pyarrow
 requests
+graphviz
