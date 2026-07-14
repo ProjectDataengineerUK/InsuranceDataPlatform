@@ -255,6 +255,14 @@ Página nova `pages/chat.py`: chat em linguagem natural sobre os dados do projet
 
 **Restrição de escopo vive na config do Genie Space, não no código do app:** quais tabelas o Genie pode consultar é inteiramente controlado pela configuração de fontes de dado do próprio Space na UI — o app não tem como (nem deveria) reimplementar esse controle em `genie_client.py`. A instrução dada ao usuário foi restringir o Space só a tabelas `gold`/`monitoring` já usadas no resto do app (nunca `bronze`/`silver` com dado bruto), mas isso não é verificável a partir deste repositório.
 
+Escopo pretendido (a manter atualizado aqui conforme o Space for editado na UI):
+
+- `gold.claims`, `gold.regulatory_susep_claims`, `gold.regulatory_dq_summary`
+- `gold.customer_consent`, `gold.open_insurance_shareable`, `gold.open_insurance_profile`
+- `monitoring._dq_results`, `monitoring._model_drift_results`, `monitoring._pipeline_latency_results`, `monitoring._regulatory_reconciliation_results`
+
+**2 `AttributeError` reais confirmados em produção, mesma causa raiz:** `GenieMessage` sem `message_id` e depois `GenieAttachment` sem `attachment_id` — a versão do `databricks-sdk` resolvida no deploy real (requirements.txt sem pin) é mais antiga do que os dataclasses documentados hoje (código-fonte do SDK em `main`, consultado durante o design deste client). Corrigido tornando `_extract_answer`/`_message_id` defensivos com `getattr(..., None)` em todo campo, não só nos 2 que já quebraram, e com fallback pro endpoint pré-attachment `get_message_query_result(space_id, conversation_id, message_id)` quando `attachment_id` não existe. Não pinamos `databricks-sdk` a uma versão mínima — a defensividade via `getattr` resolve o problema de forma agnóstica de versão, sem arriscar um pin conflitar com o que o runtime de Databricks Apps já embute.
+
 **`genie_client.py` importa `databricks.sdk` só dentro da função `ask_genie`, não no topo do módulo** — mesmo padrão de `queries.py::get_connection` — permite testar `_extract_answer` (extração de texto/SQL da resposta do Genie) sem o pacote `databricks-sdk` instalado, já que ele só existe em `apps/insurance_platform_app/requirements.txt`, não no `requirements.txt` da raiz usado pelos testes de pipeline.
 
 **Permissões de Unity Catalog não cobertas por este Terraform:** a documentação do recurso Genie em Databricks Apps menciona que o service principal do app precisa de `USE CATALOG`/`USE SCHEMA`/`SELECT` nas tabelas que o Genie consulta — não confirmado neste projeto se as grants já concedidas em `terraform/unity_catalog.tf` cobrem isso (o Genie pode rodar sob uma identidade de execução diferente da usada pela conexão SQL Warehouse direta do resto do app). Se o chat retornar erro de permissão, esse é o primeiro lugar a checar.
