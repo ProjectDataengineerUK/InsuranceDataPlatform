@@ -6,6 +6,10 @@
 
 Plataforma de dados de seguros 100% Databricks: ingestão de dados públicos reais (SUSEP, ANS) via Kafka (Confluent Cloud), processados com Spark Structured Streaming puro (sem DLT/Lakeflow) em uma arquitetura medallion (Bronze → Silver → Gold), com detecção de fraude em streaming, aprovação automática, governança via Unity Catalog e CI/CD via GitHub Actions + Databricks Asset Bundles + Terraform.
 
+![Visão geral da arquitetura](diagrams/architecture-overview.png)
+
+*Diagrama gerado em 2026-07-14, reflete os 8 módulos reais do projeto (ingestão, Bronze, Silver, Gold, MLOps, Monitoring/DataOps, App/Chat Genie, CI/CD) e o estado atual dos jobs (nenhum `continuous`, só `schedule`). O ASCII abaixo é a versão original do início do projeto — mantido como registro histórico, já defasado em relação ao diagrama acima.*
+
 ```text
 [SUSEP CSV]  [ANS CSV]
       │            │
