@@ -23,18 +23,31 @@ def _extract_answer(message: "GenieMessage") -> dict:
     # questions no mesmo turno) — concatena todo texto e guarda só o último
     # attachment de query, que é o caso comum (Genie não costuma gerar mais
     # de uma consulta por resposta).
+    #
+    # getattr(..., None) em CADA campo, não só nos IDs: a versão do
+    # databricks-sdk instalada neste workspace já se mostrou mais antiga do
+    # que os dataclasses documentados hoje em pelo menos 2 campos
+    # (GenieMessage.message_id, GenieAttachment.attachment_id, ambos
+    # confirmados via AttributeError em produção) — mais divergências de
+    # schema são prováveis, então nenhum atributo aqui é assumido presente.
     text_parts = []
     sql_query = None
     sql_description = None
     query_attachment_id = None
 
     for attachment in message.attachments or []:
-        if attachment.text and attachment.text.content:
-            text_parts.append(attachment.text.content)
-        if attachment.query:
-            sql_query = attachment.query.query
-            sql_description = attachment.query.description
-            query_attachment_id = attachment.attachment_id
+        text_attachment = getattr(attachment, "text", None)
+        content = getattr(text_attachment, "content", None) if text_attachment else None
+        if content:
+            text_parts.append(content)
+
+        query_attachment = getattr(attachment, "query", None)
+        if query_attachment:
+            sql_query = getattr(query_attachment, "query", None)
+            sql_description = getattr(query_attachment, "description", None)
+            query_attachment_id = getattr(attachment, "attachment_id", None) or getattr(
+                query_attachment, "id", None
+            )
 
     return {
         "text": "\n\n".join(text_parts) if text_parts else None,
@@ -78,18 +91,30 @@ def ask_genie(content: str, conversation_id: str | None = None) -> dict:
     }
     result.update(_extract_answer(message))
 
-    if result["query_attachment_id"]:
+    if result["sql"]:
         try:
-            query_result = w.genie.get_message_attachment_query_result(
-                space_id=space_id,
-                conversation_id=message.conversation_id,
-                message_id=message_id,
-                attachment_id=result["query_attachment_id"],
-            )
-            statement = query_result.statement_response
-            if statement and statement.result and statement.manifest and statement.manifest.schema:
-                columns = [col.name for col in statement.manifest.schema.columns or []]
-                data = statement.result.data_array or []
+            if result["query_attachment_id"]:
+                query_result = w.genie.get_message_attachment_query_result(
+                    space_id=space_id,
+                    conversation_id=message.conversation_id,
+                    message_id=message_id,
+                    attachment_id=result["query_attachment_id"],
+                )
+            else:
+                # Sem attachment_id (versão antiga do SDK/API, sem o
+                # attachment-based endpoint) — get_message_query_result é o
+                # equivalente pré-attachment, sem esse parâmetro extra.
+                query_result = w.genie.get_message_query_result(
+                    space_id=space_id, conversation_id=message.conversation_id, message_id=message_id
+                )
+
+            statement = getattr(query_result, "statement_response", None)
+            result_data = getattr(statement, "result", None) if statement else None
+            manifest = getattr(statement, "manifest", None) if statement else None
+            schema = getattr(manifest, "schema", None) if manifest else None
+            if result_data and schema:
+                columns = [col.name for col in getattr(schema, "columns", None) or []]
+                data = getattr(result_data, "data_array", None) or []
                 result["columns"] = columns
                 result["rows"] = [dict(zip(columns, row, strict=False)) for row in data]
         except Exception as exc:  # noqa: BLE001
