@@ -72,7 +72,14 @@ try:
     else:
         st.info("Nenhum registro compartilhável ainda.")
 except Exception as exc:  # noqa: BLE001
-    st.error(f"Erro ao consultar payload compartilhável: {exc}")
+    # gold.open_insurance_shareable só é criada quando profile_table E
+    # claims_table já existem (ver shareable_view.py) — pode ficar pra trás
+    # de gold.customer_consent (que só depende do consent silver) durante o
+    # bootstrap, sem ser um erro de verdade.
+    if "TABLE_OR_VIEW_NOT_FOUND" in str(exc):
+        st.info("Aguardando a primeira execução completa de open_insurance_pipeline (profile_generator + shareable_view).")
+    else:
+        st.error(f"Erro ao consultar payload compartilhável: {exc}")
 
 st.divider()
 st.subheader("Histórico de consentimento (SCD2)")
@@ -91,4 +98,7 @@ try:
     else:
         st.info("Nenhum evento de consentimento processado ainda.")
 except Exception as exc:  # noqa: BLE001
-    st.error(f"Erro ao consultar histórico de consentimento: {exc}")
+    if "TABLE_OR_VIEW_NOT_FOUND" in str(exc):
+        st.info("Nenhum evento de consentimento processado ainda.")
+    else:
+        st.error(f"Erro ao consultar histórico de consentimento: {exc}")
