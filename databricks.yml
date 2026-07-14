@@ -33,24 +33,28 @@ targets:
     variables:
       catalog: insurance_dev
     # Workspace trial: cota de serverless compute estoura com dev + prod
-    # rodando os mesmos 7 jobs contínuos em paralelo (RESOURCE_EXHAUSTED
-    # confirmado num deploy real). Os jobs declaram pause_status: UNPAUSED
-    # explicitamente (pra sobrepor o default de development mode), então só
-    # dá pra manter dev parado sobrepondo de volta aqui.
+    # rodando os mesmos jobs em paralelo (RESOURCE_EXHAUSTED confirmado num
+    # deploy real). Os jobs declaram pause_status: UNPAUSED explicitamente
+    # (pra sobrepor o default de development mode), então só dá pra manter
+    # dev parado sobrepondo de volta aqui. Todos os 4 abaixo agora são
+    # schedule, não continuous (ver resources/jobs.bronze.yml/jobs.silver.yml/
+    # jobs.regulatory_bronze.yml/jobs.fraud_score.yml) — a chave do override
+    # precisa bater com o tipo de trigger declarado na base, senão o bundle
+    # não aplica o pause.
     resources:
       jobs:
         bronze_ingest:
-          continuous:
+          schedule:
             pause_status: PAUSED
         silver_transform:
-          continuous:
+          schedule:
             pause_status: PAUSED
         fraud_score_stream:
           # schedule, não continuous, desde 2026-07-13 (ver resources/jobs.fraud_score.yml).
           schedule:
             pause_status: PAUSED
         regulatory_bronze_ingest:
-          continuous:
+          schedule:
             pause_status: PAUSED
 
   staging:
@@ -69,9 +73,11 @@ targets:
       root_path: /Workspace/Users/jonataslimacostabr@gmail.com/.bundle/${bundle.name}/${bundle.target}
     variables:
       catalog: insurance_prod
-    # Mesmo só com prod rodando (dev já pausado), os 7 jobs contínuos ainda
-    # estouram a cota de serverless do workspace trial (RESOURCE_EXHAUSTED
-    # confirmado). bronze_ingest/silver_transform continuous + fraud_score_stream
-    # schedule já estáveis (gold.claims populando de verdade, 2026-07-13).
-    # regulatory_bronze_ingest despausado no mesmo dia — se voltar
-    # RESOURCE_EXHAUSTED, é o primeiro candidato a pausar de novo.
+    # Mesmo só com prod rodando (dev já pausado), os jobs contínuos ainda
+    # estouravam a cota de serverless do workspace trial (RESOURCE_EXHAUSTED
+    # confirmado) — sintoma real observado em 2026-07-14: Bronze/Silver
+    # parados por ~15h na Visão Geral do app enquanto o producer continuava
+    # publicando normalmente. bronze_ingest, silver_transform e
+    # regulatory_bronze_ingest convertidos de continuous pra schedule nessa
+    # data (mesmo padrão já usado em fraud_score_stream desde 2026-07-13) —
+    # nenhum job contínuo restante neste bundle.

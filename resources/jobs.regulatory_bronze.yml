@@ -2,7 +2,15 @@ resources:
   jobs:
     regulatory_bronze_ingest:
       name: insurance-regulatory-bronze-ingest-${bundle.target}
-      continuous:
+      # Era continuous — convertido pra schedule em 2026-07-14 junto com
+      # bronze_ingest/silver_transform (ver resources/jobs.bronze.yml pro
+      # racional completo). */10min (não */5min como o operacional) porque o
+      # downstream regulatório (regulatory_pipeline) já roda em batch a cada
+      # 30min — não há ganho em ingerir mais rápido que isso consome. Offset
+      # de +4min evita coincidir exatamente com bronze_ingest/silver_transform.
+      schedule:
+        quartz_cron_expression: "0 4-59/10 * * * ?"
+        timezone_id: "America/Sao_Paulo"
         pause_status: UNPAUSED
       max_concurrent_runs: 1
 

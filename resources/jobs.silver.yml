@@ -2,7 +2,14 @@ resources:
   jobs:
     silver_transform:
       name: insurance-silver-transform-${bundle.target}
-      continuous:
+      # Era continuous — convertido pra schedule em 2026-07-14 junto com
+      # bronze_ingest/regulatory_bronze_ingest (ver resources/jobs.bronze.yml
+      # pro racional completo). Offset de +2min em relação a bronze_ingest
+      # (que roda em */5min) pra dar tempo do Bronze escrever antes da Silver
+      # tentar ler o mesmo intervalo.
+      schedule:
+        quartz_cron_expression: "0 2-59/5 * * * ?"
+        timezone_id: "America/Sao_Paulo"
         pause_status: UNPAUSED
       max_concurrent_runs: 1
 
