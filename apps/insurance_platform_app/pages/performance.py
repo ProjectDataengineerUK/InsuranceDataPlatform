@@ -15,6 +15,34 @@ st.caption(
     "throughput vs. volume esperado (replay.events_per_minute em config.yaml)."
 )
 
+with st.expander("🩺 Lentidão no Kafka/Databricks ou custo alto — o que fazer", expanded=True):
+    st.markdown(
+        "**Causa mais comum neste pipeline:** `bronze_ingest`, `silver_transform` e "
+        "`regulatory_bronze_ingest` competindo por cota de serverless compute quando "
+        "rodam `continuous` (24/7) — o mesmo `RESOURCE_EXHAUSTED` documentado em "
+        "`docs/ARCHITECTURE.md`. Sintoma: Bronze/Silver param de avançar (ver 'Visão "
+        "Geral') mesmo com o producer publicando normalmente, e o custo sobe porque "
+        "compute fica alocado o tempo todo, não só quando há evento pra processar. "
+        "**Convertidos pra `schedule` em 2026-07-14** (ver Custos → 'Janela de "
+        "oportunidade' e ARCHITECTURE.md) — se a lentidão voltar depois disso, é outra "
+        "causa; use o checklist por seção abaixo."
+    )
+    st.markdown(
+        "- **Taxa de quarentena alta num tópico só** → schema do producer mudou ou "
+        "campo obrigatório ausente (`bronze_ingest.py::_is_malformed`) — olhe a tabela "
+        "de quarentena abaixo antes de tocar em qualquer config de cluster.\n"
+        "- **Throughput abaixo do esperado** → backpressure ou job de ingestão parado, "
+        "não necessariamente Kafka lento — confirme em 'Visão Geral' se Bronze está "
+        "avançando antes de aumentar partições/compute.\n"
+        "- **Consumer lag crescendo entre execuções seguidas desta página** → "
+        "consumidor (job Databricks) mais lento que o producer — candidato real a "
+        "aumentar compute; lag pontual isolado não é.\n"
+        "- **Consumer lag sempre vazio** → não é necessariamente 'sem problema': Spark "
+        "Structured Streaming não usa consumer group nativo do Kafka (ver "
+        "`kafka_lag_reporter.py`) — se o job de ingestão estiver parado, nada é "
+        "reportado. Cruze com 'Visão Geral' antes de concluir que está tudo bem."
+    )
+
 # Tópicos operacionais + regulatório — mesma lista de resources/jobs.bronze.yml
 # e resources/jobs.regulatory_bronze.yml. bronze_table vem de constante interna,
 # nunca de input do usuário (ver ressalva em build_quarantine_rate_query).
@@ -92,6 +120,17 @@ if rate_by_topic:
     st.caption("Taxa de quarentena por tópico (%)")
     st.bar_chart(rate_by_topic)
 
+    worst_topic, worst_rate = max(rate_by_topic.items(), key=lambda item: item[1])
+    if worst_rate > 5:
+        st.warning(
+            f"'{worst_topic}' com {worst_rate:.1f}% em quarentena — acima do que se "
+            "espera de um schema estável. Olhe `bronze.<tabela>_quarantine` desse "
+            "tópico antes de mexer em compute; costuma ser schema do producer "
+            "desalinhado com `--required-fields`, não capacidade."
+        )
+    elif worst_rate > 1:
+        st.info(f"'{worst_topic}' com {worst_rate:.1f}% em quarentena — vale monitorar, ainda dentro do esperado.")
+
 st.divider()
 st.subheader("Throughput vs. volume esperado")
 try:
@@ -122,6 +161,16 @@ try:
         events_per_minute = details.get("events_per_minute") or []
         if events_per_minute:
             st.line_chart(events_per_minute)
+
+        observed = details.get("minutes_observed") or 0
+        below = details.get("minutes_below_80pct_expected") or 0
+        if observed and below / observed > 0.2:
+            st.warning(
+                f"{below}/{observed} minutos abaixo de 80% do volume esperado — sinal "
+                "de backpressure ou perda no Kafka→Bronze. Confirme primeiro na 'Visão "
+                "Geral' se bronze_ingest está avançando antes de assumir que é volume "
+                "de Kafka; um job de ingestão parado produz exatamente este sintoma."
+            )
     else:
         st.info("Nenhuma checagem de throughput com amostras nas últimas 200 janelas.")
 except Exception as exc:  # noqa: BLE001
