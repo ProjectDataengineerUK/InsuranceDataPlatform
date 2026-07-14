@@ -5,14 +5,20 @@
 # recurso existir só num target específico. `databricks bundle validate -t
 # dev` não deve mostrar nada deste arquivo.
 #
-# O AI/BI Dashboard e o Genie Space (Decision 4 do DESIGN) ainda não entram
-# aqui: ambos são prototipados interativamente na UI do workspace prod e só
-# depois capturados via `databricks bundle generate dashboard --existing-id
-# <id>` / `databricks bundle generate genie-space --existing-id <id>` — não
-# existe um `.lvdash.json`/definição de Genie pra referenciar ainda. Ver
-# README.md "Ativando a camada de visualização" pro passo a passo completo;
-# os blocos `dashboards:`/`genie_spaces:` entram neste arquivo assim que
-# esses comandos rodarem pela primeira vez.
+# O AI/BI Dashboard (Decision 4 do DESIGN) ainda não entra aqui: é
+# prototipado interativamente na UI do workspace prod e só depois capturado
+# via `databricks bundle generate dashboard --existing-id <id>` — não existe
+# um `.lvdash.json` pra referenciar ainda. Ver README.md "Ativando a camada
+# de visualização" pro passo a passo completo; o bloco `dashboards:` entra
+# neste arquivo assim que esse comando rodar pela primeira vez.
+#
+# Genie Space ("Insurance Claims and Compliance Analytics", criado
+# manualmente na UI em 2026-07-14, apontando só pras tabelas gold/monitoring
+# já usadas no resto do app — nunca bronze/silver com dado bruto) entra
+# abaixo como um resource do app (pages/chat.py), não como
+# `resources.genie_spaces` no nível do bundle — referenciamos o space_id
+# existente diretamente (mesmo padrão do `sql-warehouse` abaixo, que também
+# referencia um recurso pré-provisionado por id, não criado pelo bundle).
 targets:
   prod:
     resources:
@@ -52,3 +58,14 @@ targets:
                 scope: "insurance-platform"
                 key: "confluent-cluster-id"
                 permission: "READ"
+            # Chat em linguagem natural (pages/chat.py) — CAN_RUN (não
+            # CAN_MANAGE/CAN_EDIT): o app só precisa submeter perguntas e ler
+            # respostas, nunca administrar o Space. Schema do tipo
+            # `genie_space` (name/space_id/permission) ainda não confirmado
+            # num deploy real — mesma ressalva já feita acima pro
+            # sql-warehouse e pros secrets.
+            - name: "genie-space"
+              genie_space:
+                name: "Insurance Claims and Compliance Analytics"
+                space_id: "01f17fa3095e10848645c8a1cea37291"
+                permission: "CAN_RUN"

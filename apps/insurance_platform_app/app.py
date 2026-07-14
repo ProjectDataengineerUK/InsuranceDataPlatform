@@ -4,6 +4,7 @@ st.set_page_config(page_title="Insurance Regulatory Platform", layout="wide")
 
 pages = [
     st.Page("pages/status.py", title="Visão Geral", default=True),
+    st.Page("pages/chat.py", title="Chat com os dados"),
     st.Page("pages/susep_compliance.py", title="Conformidade SUSEP"),
     st.Page("pages/open_insurance.py", title="Open Insurance"),
     st.Page("pages/fraud_probability.py", title="Probabilidade de Fraude"),

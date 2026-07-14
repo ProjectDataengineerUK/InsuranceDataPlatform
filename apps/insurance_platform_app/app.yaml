@@ -17,3 +17,5 @@ env:
     valueFrom: confluent-metrics-api-secret
   - name: CONFLUENT_CLUSTER_ID
     valueFrom: confluent-cluster-id
+  - name: GENIE_SPACE_ID
+    valueFrom: genie-space
