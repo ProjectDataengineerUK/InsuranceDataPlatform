@@ -12,6 +12,9 @@ from queries import (
     build_fraud_probability_query,
     build_fraud_probability_summary_query,
     build_model_drift_query,
+    build_open_insurance_consent_history_query,
+    build_open_insurance_consent_summary_query,
+    build_open_insurance_shareable_query,
     build_pipeline_latency_query,
     build_reconciliation_query,
     build_sla_breach_query,
@@ -48,6 +51,29 @@ def test_build_source_system_volume_query():
 
     assert "silver.regulatory_claims" in query.sql
     assert "source_system" in query.sql
+
+
+def test_build_open_insurance_consent_summary_query():
+    query = build_open_insurance_consent_summary_query()
+
+    assert "gold.customer_consent" in query.sql
+    assert "target_institution" in query.sql
+    assert query.params == {}
+
+
+def test_build_open_insurance_shareable_query_default_limit():
+    query = build_open_insurance_shareable_query()
+
+    assert "gold.open_insurance_shareable" in query.sql
+    assert query.params == {"row_limit": 100}
+
+
+def test_build_open_insurance_consent_history_query_custom_limit():
+    query = build_open_insurance_consent_history_query(row_limit=50)
+
+    assert "silver.consent_current" in query.sql
+    assert "is_current" in query.sql
+    assert query.params == {"row_limit": 50}
 
 
 def test_build_fraud_probability_query_default_limit():

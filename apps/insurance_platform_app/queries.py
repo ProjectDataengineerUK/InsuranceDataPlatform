@@ -47,6 +47,44 @@ def build_source_system_volume_query() -> SqlQuery:
     )
 
 
+def build_open_insurance_consent_summary_query() -> SqlQuery:
+    # gold.customer_consent já filtra is_current = true (ver
+    # shareable_view.py::CONSENT_VIEW_SQL) — resumo do estado vigente de
+    # consentimento por instituição de destino.
+    return SqlQuery(
+        sql=(
+            "SELECT consent_status, target_institution, COUNT(*) AS total "
+            "FROM gold.customer_consent GROUP BY consent_status, target_institution "
+            "ORDER BY total DESC"
+        ),
+        params={},
+    )
+
+
+def build_open_insurance_shareable_query(row_limit: int = 100) -> SqlQuery:
+    # gold.open_insurance_shareable já filtra consent_status = 'GRANTED' (ver
+    # shareable_view.py::SHAREABLE_VIEW_SQL) — é literalmente o payload que
+    # seria compartilhado com a instituição de destino sob consentimento ativo.
+    return SqlQuery(
+        sql="SELECT * FROM gold.open_insurance_shareable ORDER BY policy_id LIMIT :row_limit",
+        params={"row_limit": row_limit},
+    )
+
+
+def build_open_insurance_consent_history_query(row_limit: int = 200) -> SqlQuery:
+    # silver.consent_current é o SCD2 completo (histórico + vigente, ver
+    # src/open_insurance/consent_scd.py) — diferente de gold.customer_consent,
+    # que só mostra o estado vigente (is_current = true).
+    return SqlQuery(
+        sql=(
+            "SELECT policy_id, consent_status, target_institution, scope, "
+            "event_timestamp, is_current, valid_from, valid_to "
+            "FROM silver.consent_current ORDER BY valid_from DESC LIMIT :row_limit"
+        ),
+        params={"row_limit": row_limit},
+    )
+
+
 def build_fraud_probability_query(row_limit: int = 100) -> SqlQuery:
     # fraud_score é a heurística real que decide fraud_flag/auto_approved
     # (streaming_score.py); model_fraud_score é o shadow score do modelo
