@@ -51,7 +51,7 @@ def _freshness_check(node_id: str, table: str, timestamp_column: str) -> None:
         details[node_id] = f"último registro: {latest_ts}" if latest_ts else "sem dados ainda"
     except Exception as exc:  # noqa: BLE001
         statuses[node_id] = UNKNOWN
-        details[node_id] = str(exc)
+        details[node_id] = "sem dados ainda" if "TABLE_OR_VIEW_NOT_FOUND" in str(exc) else str(exc)
 
 
 _freshness_check("bronze_operational", "bronze.claims", "_ingested_at")
@@ -80,7 +80,15 @@ try:
 except Exception as exc:  # noqa: BLE001
     statuses["fraud_model"] = UNKNOWN
     statuses["model_drift"] = UNKNOWN
-    details["fraud_model"] = details["model_drift"] = str(exc)
+    # monitoring._model_drift_results só é criada quando model_drift_monitor
+    # roda com uma baseline já escrita (train_model.py só escreve baseline
+    # quando promove o 1º champion) — TABLE_OR_VIEW_NOT_FOUND aqui é "sem
+    # champion ainda", não erro (mesmo tratamento de dataops_mlops_sentinel.py
+    # e pipeline_monitoring.py, que faltava neste ponto específico).
+    if "TABLE_OR_VIEW_NOT_FOUND" in str(exc):
+        details["fraud_model"] = details["model_drift"] = "aguardando o primeiro champion promovido"
+    else:
+        details["fraud_model"] = details["model_drift"] = str(exc)
 
 try:
     breach_rows = run_query(connection, build_sla_breach_query(sla_hours=24, row_limit=200))
@@ -88,7 +96,11 @@ try:
     details["sla_breach"] = f"{len(breach_rows)} sinistro(s) aguardando revisão há mais de 24h"
 except Exception as exc:  # noqa: BLE001
     statuses["sla_breach"] = UNKNOWN
-    details["sla_breach"] = str(exc)
+    details["sla_breach"] = (
+        "aguardando o primeiro sinistro pontuado (gold.claims ainda não existe)"
+        if "TABLE_OR_VIEW_NOT_FOUND" in str(exc)
+        else str(exc)
+    )
 
 try:
     reconciliation_rows = run_query(connection, build_reconciliation_query(row_limit=200))
@@ -96,7 +108,11 @@ try:
     details["reconciliation"] = f"{len(reconciliation_rows)} discrepância(s) recente(s) entre fontes"
 except Exception as exc:  # noqa: BLE001
     statuses["reconciliation"] = UNKNOWN
-    details["reconciliation"] = str(exc)
+    details["reconciliation"] = (
+        "aguardando a primeira execução do pipeline regulatório"
+        if "TABLE_OR_VIEW_NOT_FOUND" in str(exc)
+        else str(exc)
+    )
 
 try:
     summary_rows = run_query(connection, build_susep_compliance_summary_query())
@@ -108,7 +124,11 @@ try:
     details["susep_compliance"] = f"{compliant}/{total} contratos aderentes ({rate})"
 except Exception as exc:  # noqa: BLE001
     statuses["susep_compliance"] = UNKNOWN
-    details["susep_compliance"] = str(exc)
+    details["susep_compliance"] = (
+        "aguardando a primeira execução do export SUSEP (gold.regulatory_susep_claims ainda não existe)"
+        if "TABLE_OR_VIEW_NOT_FOUND" in str(exc)
+        else str(exc)
+    )
 
 try:
     dq_rows = run_query(connection, build_dq_results_query(row_limit=100))
@@ -121,7 +141,7 @@ try:
         statuses["dq_checks"] = UNKNOWN
 except Exception as exc:  # noqa: BLE001
     statuses["dq_checks"] = UNKNOWN
-    details["dq_checks"] = str(exc)
+    details["dq_checks"] = "sem checagens ainda" if "TABLE_OR_VIEW_NOT_FOUND" in str(exc) else str(exc)
 
 try:
     latency_rows = run_query(connection, build_table_count_query("monitoring._pipeline_latency_results"))
@@ -134,7 +154,7 @@ try:
     )
 except Exception as exc:  # noqa: BLE001
     statuses["pipeline_latency"] = UNKNOWN
-    details["pipeline_latency"] = str(exc)
+    details["pipeline_latency"] = "sem checagens ainda" if "TABLE_OR_VIEW_NOT_FOUND" in str(exc) else str(exc)
 
 try:
     shareable_rows = run_query(connection, build_table_count_query("gold.open_insurance_shareable"))

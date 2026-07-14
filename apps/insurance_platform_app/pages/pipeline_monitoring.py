@@ -10,6 +10,22 @@ st.caption(
     "do score de fraude Bronze → Gold (alvo < 1 min) e throughput vs. volume esperado."
 )
 
+with st.expander("🩺 Latência ou throughput fora do SLA — o que fazer", expanded=True):
+    st.markdown(
+        "- **Kafka → Bronze fora do SLA (>2min) de forma sustentada** → confirme em "
+        "'Visão Geral' se `bronze_ingest` está avançando; um job de ingestão parado ou "
+        "competindo por cota de serverless (`RESOURCE_EXHAUSTED`, ver "
+        "docs/ARCHITECTURE.md) produz exatamente esse sintoma, não necessariamente "
+        "Kafka lento.\n"
+        "- **Score de fraude fora do SLA (>7min)** → depende do Kafka→Bronze já estar "
+        "ok primeiro (é a etapa seguinte); se ambos estiverem fora, resolva o "
+        "Kafka→Bronze antes — o score não tem como ficar rápido com Bronze atrasado.\n"
+        "- **'sem dados suficientes na janela' persistente, não só uma checagem** → o "
+        "job de ingestão pode estar parado (não é 'sem tráfego pontual'); cheque o "
+        "campo 'X/200 checagens com amostras' de cada métrica abaixo — cobertura baixa "
+        "sustentada é sinal de job parado, não de janela de 15min sem sorte."
+    )
+
 try:
     connection = get_connection()
 except Exception as exc:  # noqa: BLE001
@@ -56,6 +72,7 @@ latest_by_metric: dict[str, dict] = {}
 last_data_by_metric: dict[str, dict] = {}
 samples_seen: dict[str, int] = {name: 0 for name in METRIC_LABELS}
 checks_seen: dict[str, int] = {name: 0 for name in METRIC_LABELS}
+breaches_seen: dict[str, int] = {name: 0 for name in METRIC_LABELS}
 
 for row in rows:
     metric_name = row["metric_name"]
@@ -69,6 +86,8 @@ for row in rows:
         samples_seen[metric_name] += 1
         if metric_name not in last_data_by_metric:
             last_data_by_metric[metric_name] = row
+        if row["within_sla"] is False:
+            breaches_seen[metric_name] += 1
 
 cols = st.columns(len(latest_by_metric))
 for col, (metric_name, row) in zip(cols, latest_by_metric.items(), strict=False):
@@ -96,6 +115,13 @@ for col, (metric_name, row) in zip(cols, latest_by_metric.items(), strict=False)
         col.caption(f"última janela com dados: {data_row['_checked_at']}")
     elif data_row is None:
         col.caption("nenhuma amostra nas últimas 200 checagens")
+
+    breach_ratio = breaches_seen[metric_name] / samples_seen[metric_name] if samples_seen[metric_name] else 0
+    if breach_ratio > 0.2:
+        col.warning(
+            f"{breaches_seen[metric_name]}/{samples_seen[metric_name]} checagens com "
+            "amostra ficaram fora do SLA — não é pico isolado, ver checklist acima."
+        )
 
 st.divider()
 st.subheader("Tendência (200 checagens mais recentes)")
