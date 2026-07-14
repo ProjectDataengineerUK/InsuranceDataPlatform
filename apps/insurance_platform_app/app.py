@@ -13,6 +13,7 @@ pages = [
     st.Page("pages/performance.py", title="Performance Kafka & Databricks"),
     st.Page("pages/custos.py", title="Custos"),
     st.Page("pages/lineage.py", title="Lineage"),
+    st.Page("pages/faq_entrevista.py", title="FAQ — Preparação de Entrevista"),
 ]
 
 navigation = st.navigation(pages)

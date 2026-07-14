@@ -1,0 +1,1093 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kafka, Databricks & Spark Structured Streaming — Guia de Entrevista</title>
+<style>
+  :root {
+    --bg: #12151c;
+    --surface: #1a2029;
+    --surface-2: #212836;
+    --border: #2b3342;
+    --text: #e7e9ee;
+    --text-dim: #98a2b8;
+    --text-faint: #616b80;
+    --accent: #d99a4e;
+    --accent-soft: #7a5730;
+    --accent-wash: rgba(217, 154, 78, 0.12);
+    --good: #4caf82;
+    --warn: #d9a441;
+    --bad: #e0716a;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --mono: "SF Mono", "Cascadia Code", Consolas, "Roboto Mono", monospace;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f7f4ee;
+      --surface: #ffffff;
+      --surface-2: #f1ede3;
+      --border: #e3ddd0;
+      --text: #201d1a;
+      --text-dim: #6b6255;
+      --text-faint: #9a9385;
+      --accent: #a8631f;
+      --accent-soft: #e4c9a3;
+      --accent-wash: rgba(168, 99, 31, 0.08);
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  a { color: var(--accent); }
+  a:focus-visible, button:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .shell {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 6rem;
+  }
+
+  header.top {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding-bottom: 2rem;
+    margin-bottom: 2.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  h1 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: clamp(1.8rem, 3.4vw, 2.6rem);
+    line-height: 1.15;
+    margin: 0;
+    text-wrap: balance;
+    letter-spacing: -0.01em;
+  }
+
+  .top p.lede {
+    font-size: 1.02rem;
+    color: var(--text-dim);
+    max-width: 62ch;
+    margin: 0.2rem 0 0;
+  }
+
+  .top .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.4rem;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--text-faint);
+    margin-top: 0.6rem;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    gap: 3rem;
+    align-items: start;
+  }
+
+  nav.toc {
+    position: sticky;
+    top: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    font-family: var(--mono);
+    font-size: 0.82rem;
+  }
+
+  nav.toc .toc-title {
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin-bottom: 0.6rem;
+  }
+
+  nav.toc a {
+    color: var(--text-dim);
+    text-decoration: none;
+    padding: 0.35rem 0.6rem;
+    border-radius: 4px;
+    border-left: 2px solid transparent;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+
+  nav.toc a:hover {
+    color: var(--text);
+    background: var(--surface);
+    border-left-color: var(--accent);
+  }
+
+  nav.toc .count {
+    color: var(--text-faint);
+    margin-left: 0.35rem;
+  }
+
+  main {
+    min-width: 0;
+  }
+
+  section.topic {
+    margin-bottom: 3.2rem;
+    scroll-margin-top: 1.5rem;
+  }
+
+  section.topic > .topic-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.9rem;
+    margin-bottom: 0.4rem;
+  }
+
+  section.topic h2 {
+    font-family: var(--serif);
+    font-size: 1.55rem;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -0.005em;
+  }
+
+  section.topic .topic-tag {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--text-faint);
+    white-space: nowrap;
+  }
+
+  section.topic > p.topic-intro {
+    color: var(--text-dim);
+    max-width: 68ch;
+    margin: 0.3rem 0 1.6rem;
+  }
+
+  .qa {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.3rem 1.5rem 1.4rem;
+    margin-bottom: 1rem;
+  }
+
+  .qa-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.55rem;
+  }
+
+  .qa h3 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 1.08rem;
+    margin: 0;
+    line-height: 1.4;
+    text-wrap: balance;
+  }
+
+  .level {
+    flex: none;
+    font-family: var(--mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.22rem 0.55rem;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+
+  .level[data-level="basico"] { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, var(--border)); }
+  .level[data-level="intermediario"] { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, var(--border)); }
+  .level[data-level="senior"] { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+  .level[data-level="staff"] { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, var(--border)); background: var(--accent-wash); }
+
+  .qa .answer {
+    max-width: 70ch;
+    color: var(--text);
+  }
+
+  .qa .answer p { margin: 0 0 0.7rem; }
+  .qa .answer p:last-child { margin-bottom: 0; }
+
+  .qa code, .story code {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    background: var(--surface-2);
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  .qa pre, .story pre {
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.7rem 0.9rem;
+    overflow-x: auto;
+    margin: 0.6rem 0;
+  }
+
+  .story {
+    background: linear-gradient(180deg, var(--accent-wash), transparent 60%), var(--surface);
+    border: 1px solid var(--accent-soft);
+    border-radius: 10px;
+    padding: 1.3rem 1.5rem 1.4rem;
+    margin-bottom: 1rem;
+  }
+
+  .story .story-title {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 1.08rem;
+    margin: 0 0 0.5rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+  }
+
+  .story .story-file {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--text-faint);
+    font-weight: 400;
+  }
+
+  .story .answer { max-width: 70ch; }
+
+  footer.end {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    color: var(--text-faint);
+    font-family: var(--mono);
+    font-size: 0.76rem;
+  }
+
+  @media (max-width: 880px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc {
+      position: static;
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      padding-bottom: 1rem;
+      margin-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    nav.toc .toc-title { display: none; }
+    nav.toc a {
+      border: 1px solid var(--border);
+      border-left: 1px solid var(--border);
+    }
+    nav.toc a:hover { border-left-color: var(--accent); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="top">
+    <span class="eyebrow">Guia de preparação · Especialista de Dados Sênior</span>
+    <h1>Kafka, Databricks &amp; Spark Structured Streaming — na prática, não no genérico</h1>
+    <p class="lede">
+      Cada resposta aqui vem de uma decisão, um bug ou um trade-off real deste projeto
+      (Insurance Data Platform) — não de definição de manual. Do conceito básico até a
+      solução que só aparece depois de quebrar a cara em produção, incluindo FinOps.
+    </p>
+    <div class="meta">
+      <span>7 seções</span>
+      <span>34 perguntas</span>
+      <span>níveis: básico → intermediário → sênior → staff</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="toc" aria-label="Sumário">
+      <span class="toc-title">Sumário</span>
+      <a href="#kafka">Kafka <span class="count">05</span></a>
+      <a href="#spark">Spark Structured Streaming <span class="count">05</span></a>
+      <a href="#databricks">Databricks &amp; Unity Catalog <span class="count">05</span></a>
+      <a href="#medallion">Medallion &amp; Qualidade de Dados <span class="count">05</span></a>
+      <a href="#mlops">MLOps &amp; Shadow Scoring <span class="count">05</span></a>
+      <a href="#finops">FinOps <span class="count">05</span></a>
+      <a href="#warstories">Casos reais de produção <span class="count">05</span></a>
+    </nav>
+
+    <main>
+
+      <section class="topic" id="kafka">
+        <div class="topic-head">
+          <h2>Kafka</h2>
+          <span class="topic-tag">ingestão &amp; observabilidade</span>
+        </div>
+        <p class="topic-intro">
+          O producer publica em rajadas agendadas (GitHub Actions), não always-on — e o
+          consumidor real do lado Databricks é Spark, não um consumer group clássico.
+          Essa segunda parte é onde a maioria dos candidatos erra.
+        </p>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>O que é uma partição e por que ela é a unidade real de paralelismo e ordenação?</h3>
+            <span class="level" data-level="basico">Básico</span>
+          </div>
+          <div class="answer">
+            <p>
+              Um tópico Kafka é dividido em partições; cada partição é um log ordenado e
+              imutável, e a ordem só é garantida <em>dentro</em> de uma partição, nunca entre
+              partições do mesmo tópico. Neste projeto, os tópicos operacionais
+              (<code>claim-opened</code>, <code>policy-created</code>, <code>customer-updated</code>)
+              e o tópico regulatório único (<code>regulatory-claim-report</code>, compartilhado por
+              3 fontes fictícias) são a unidade que o Bronze consome — cada partição vira uma
+              unidade de paralelismo de leitura no Spark, e cada uma delas é rastreada
+              separadamente pelo <code>kafka_lag_reporter</code>.
+            </p>
+          </div>
+        </article>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>O que um consumer group garante — e o que ele não garante?</h3>
+            <span class="level" data-level="basico">Básico</span>
+          </div>
+          <div class="answer">
+            <p>
+              Garante que, dentro de um grupo, cada partição seja consumida por só um membro
+              por vez (balanceamento de carga) e que o progresso seja rastreável via offset
+              commitado no tópico interno <code>__consumer_offsets</code>. Não garante
+              "exactly-once" por si só — isso depende de como o consumidor trata reprocessamento
+              em caso de falha antes do commit. É exatamente esse detalhe que separa um
+              consumer group Kafka nativo do que o Spark Structured Streaming faz (ver seção
+              seguinte).
+            </p>
+          </div>
+        </article>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>Por que este projeto usa duas API Keys diferentes do Confluent Cloud?</h3>
+            <span class="level" data-level="intermediario">Intermediário</span>
+          </div>
+          <div class="answer">
+            <p>
+              <code>CONFLUENT_API_KEY/SECRET</code> é uma API Key de <strong>cluster</strong>
+              (escopo Kafka: produce/consume/admin de offsets) — usada pelo producer e pelo
+              <code>kafka_lag_reporter</code>. <code>CONFLUENT_METRICS_API_KEY/SECRET</code> é uma
+              Cloud API Key de <strong>conta</strong> (escopo "Global", exige papel
+              <code>OrganizationAdmin</code>) — a única que tem permissão pra consultar a Metrics
+              API (<code>consumer_lag_offsets</code>, <code>received_bytes</code>). Confundir os
+              dois escopos é o erro mais comum ao integrar observabilidade externa num pipeline
+              Kafka — a API key de cluster simplesmente não tem escopo pra isso, e o erro que
+              volta não deixa isso óbvio.
+            </p>
+          </div>
+        </article>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>Por que um consumer Spark Structured Streaming não aparece como consumer group real no Kafka?</h3>
+            <span class="level" data-level="senior">Sênior</span>
+          </div>
+          <div class="answer">
+            <p>
+              Porque a tolerância a falhas do Structured Streaming é 100% controlada pelo seu
+              próprio <strong>checkpoint</strong> (offsets gravados no Delta/DBFS), não pelo
+              protocolo de consumer group do Kafka. O conector Kafka do Spark lê offsets
+              diretamente, sem nunca commitar de volta pra <code>__consumer_offsets</code>. Do
+              ponto de vista do broker, esse "consumidor" é invisível como grupo — o que quer
+              dizer que qualquer ferramenta de terceiros que dependa de consumer group nativo
+              (como a Confluent Metrics API pra <code>consumer_lag_offsets</code>) nunca vai
+              reportar nada pra esse job, mesmo que ele esteja processando dado perfeitamente
+              saudável.
+            </p>
+          </div>
+        </article>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>Como dar visibilidade externa de lag pra um consumidor que não usa consumer group nativo?</h3>
+            <span class="level" data-level="staff">Staff</span>
+          </div>
+          <div class="answer">
+            <p>
+              A saída aqui foi um commit administrativo de offset via KIP-496
+              (<code>AdminClient.alter_consumer_group_offsets</code>), chamado a cada micro-batch
+              do <code>bronze_ingest.py</code> com um <code>group_id</code> sintético
+              (<code>databricks-bronze-&lt;topic&gt;</code>). Isso não muda em nada a lógica de
+              streaming real — é só um "carimbo" administrativo pra existir um consumer group de
+              verdade que a Metrics API consiga enxergar. O detalhe fino: isso roda num
+              <code>try/except</code> amplo e nunca deve derrubar a ingestão — perder uma
+              atualização de lag é aceitável, perder um batch de dado não é. É esse tipo de
+              escolha assimétrica de risco que separa "funciona no demo" de "sobrevive em
+              produção".
+            </p>
+          </div>
+        </article>
+      </section>
+
+      <section class="topic" id="spark">
+        <div class="topic-head">
+          <h2>Spark Structured Streaming</h2>
+          <span class="topic-tag">micro-batch, checkpoint, trigger</span>
+        </div>
+        <p class="topic-intro">
+          A pergunta que separa quem só rodou um tutorial de quem operou isso em produção:
+          "o que acontece quando o job reinicia no meio de um batch?" — a resposta certa
+          está inteira no checkpoint, não no Kafka.
+        </p>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>Qual é a ideia central do Structured Streaming — "stream como tabela ilimitada"?</h3>
+            <span class="level" data-level="basico">Básico</span>
+          </div>
+          <div class="answer">
+            <p>
+              O Structured Streaming trata um stream como uma tabela que cresce
+              indefinidamente, e você escreve a mesma DataFrame API/SQL que escreveria contra
+              uma tabela estática. O motor decide, por trás, como processar incrementalmente só
+              o que é novo — isso é o que permite reaproveitar <code>silver_transform.py</code>
+              (dedup + checks de qualidade) com a mesma lógica de DataFrame usada em qualquer
+              outro lugar do projeto.
+            </p>
+          </div>
+        </article>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>Por que checkpoint é o mecanismo real de tolerância a falhas, não o Kafka?</h3>
+            <span class="level" data-level="intermediario">Intermediário</span>
+          </div>
+          <div class="answer">
+            <p>
+              O checkpoint (em <code>/Volumes/&lt;catalog&gt;/bronze/_checkpoints/&lt;topic&gt;</code>
+              neste projeto) grava os offsets já processados e o estado da query. Se o job cair
+              e reiniciar, ele retoma exatamente de onde parou — sem depender de nenhum commit
+              no lado do Kafka. É por isso que <code>startingOffsets=earliest</code> é seguro
+              aqui: na prática, o checkpoint já existente manda mais que essa configuração
+              assim que o job já rodou uma vez.
+            </p>
+          </div>
+        </article>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3><code>trigger(availableNow=True)</code> vs <code>processingTime</code> vs continuous — quando usar cada um?</h3>
+            <span class="level" data-level="intermediario">Intermediário</span>
+          </div>
+          <div class="answer">
+            <p>
+              <code>processingTime</code> mantém o cluster ativo continuamente, microbatch a
+              microbatch, num intervalo fixo. <code>availableNow=True</code> processa tudo que
+              chegou desde o último checkpoint e <strong>termina sozinho</strong> — ideal pra
+              rodar como job agendado, sem manter compute alocado entre execuções. O "continuous
+              trigger" real do Spark (baixíssima latência, experimental) é outra coisa e nem
+              entra aqui. É fácil confundir isso com "job <code>continuous</code>" do Databricks
+              Jobs (que é sobre o agendador reiniciar o job, não sobre o trigger do Spark) — e
+              essa ambiguidade de nomenclatura é armadilha clássica de entrevista.
+            </p>
+          </div>
+        </article>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>Qual o papel de <code>foreachBatch</code>, e por que ele é o ponto certo pra side-effects?</h3>
+            <span class="level" data-level="senior">Sênior</span>
+          </div>
+          <div class="answer">
+            <p>
+              <code>foreachBatch</code> dá acesso à DataFrame de cada micro-batch como uma
+              tabela estática — o que permite fazer coisas que uma streaming query "pura" não
+              deixa (múltiplos sinks, agregações complexas, side-effects). Neste projeto,
+              <code>_write_batch</code> usa isso pra: (1) separar registros válidos de
+              quarentena, (2) escrever os dois em tabelas Delta diferentes, e (3) calcular o
+              offset máximo por partição e reportar pro <code>kafka_lag_reporter</code> — três
+              responsabilidades que não caberiam numa <code>writeStream</code> direta sem
+              <code>foreachBatch</code>.
+            </p>
+          </div>
+        </article>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>Um bug real: por que "CANNOT_DETERMINE_TYPE" acontece com uma coluna inteiramente nula?</h3>
+            <span class="level" data-level="staff">Staff</span>
+          </div>
+          <div class="answer">
+            <p>
+              <code>measure_pipeline_latency.py</code> monta um relatório onde, sem eventos
+              recentes, a chave <code>within_sla</code> fica ausente em todos os 3 relatórios —
+              a coluna inteira do <code>createDataFrame</code> fica <code>None</code>. O Spark
+              clássico infere isso; o <strong>Spark Connect</strong> (usado neste compute
+              serverless) não consegue inferir tipo de uma coluna 100% nula e falha com
+              <code>CANNOT_DETERMINE_TYPE</code>. A correção foi declarar um
+              <code>StructType</code> explícito pro schema do relatório — um lembrete de que
+              Spark Connect não é um drop-in 1:1 do Spark clássico, e comportamento de inferência
+              de schema é exatamente onde essas diferenças aparecem.
+            </p>
+          </div>
+        </article>
+      </section>
+
+      <section class="topic" id="databricks">
+        <div class="topic-head">
+          <h2>Databricks &amp; Unity Catalog</h2>
+          <span class="topic-tag">governança, IaC, cota</span>
+        </div>
+        <p class="topic-intro">
+          Bundles (DABs) tratam jobs, apps e permissões como código — mas cota de compute
+          serverless num workspace trial é um limite físico que nenhum YAML resolve sozinho.
+        </p>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>O que é a hierarquia <code>catalog.schema.table</code> do Unity Catalog?</h3>
+            <span class="level" data-level="basico">Básico</span>
+          </div>
+          <div class="answer">
+            <p>
+              Catalog é o nível mais alto (aqui, um catálogo por ambiente:
+              <code>insurance_dev</code>/<code>insurance_staging</code>/<code>insurance_prod</code>),
+              schema agrupa tabelas por camada (<code>bronze</code>, <code>silver</code>,
+              <code>gold</code>, <code>monitoring</code>), e table é a unidade final. Essa
+              hierarquia é o que permite o mesmo código de pipeline rodar em 3 ambientes
+              trocando só a variável <code>catalog</code> do bundle, sem duplicar lógica.
+            </p>
+          </div>
+        </article>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>O que são Databricks Asset Bundles e por que usar isso em vez de clicar na UI?</h3>
+            <span class="level" data-level="basico">Básico</span>
+          </div>
+          <div class="answer">
+            <p>
+              DABs descrevem jobs, pipelines, apps e permissões como YAML versionado — o mesmo
+              <code>resources/jobs.bronze.yml</code> é aplicado em dev/staging/prod via
+              <code>databricks bundle deploy -t &lt;target&gt;</code>, disparado pelo CI/CD
+              (<code>.github/workflows/deploy.yml</code>). Isso dá revisão de código,
+              histórico de mudança e reprodutibilidade — o oposto de configurar um job manualmente
+              na UI e torcer pra lembrar depois o que foi feito.
+            </p>
+          </div>
+        </article>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>O que são "system tables" e por que <code>system.billing.usage</code> pode simplesmente não existir?</h3>
+            <span class="level" data-level="intermediario">Intermediário</span>
+          </div>
+          <div class="answer">
+            <p>
+              System tables são tabelas nativas do Unity Catalog com telemetria da própria conta
+              (billing, auditoria, lineage) — mas precisam ser habilitadas explicitamente pelo
+              account admin (Settings → Feature enablement) antes de existirem. A página de
+              Custos deste app trata a ausência disso como um <code>try/except</code> que gera
+              um aviso explicativo, nunca um erro que derruba a página — o mesmo padrão de
+              degradação graciosa usado em qualquer tabela que só existe após um bootstrap.
+            </p>
+          </div>
+        </article>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>Por que um Databricks App não enxerga o resto do repositório do bundle?</h3>
+            <span class="level" data-level="senior">Sênior</span>
+          </div>
+          <div class="answer">
+            <p>
+              Porque <code>source_code_path</code> em <code>resources/visualization.yml</code>
+              restringe o deploy do app só a <code>apps/insurance_platform_app</code> — os
+              YAMLs de jobs, Terraform e o resto de <code>src/</code> nunca são sincronizados
+              pro runtime do app. Isso importa na prática: qualquer "conhecimento de
+              arquitetura" que o app precise mostrar (como cadência de jobs na página de Custos)
+              precisa estar hardcoded como constante Python dentro do próprio app, porque não há
+              como ler os YAMLs em runtime.
+            </p>
+          </div>
+        </article>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>Compute serverless vs clássico: por que <code>RESOURCE_EXHAUSTED</code> acontece mesmo com jobs "leves"?</h3>
+            <span class="level" data-level="staff">Staff</span>
+          </div>
+          <div class="answer">
+            <p>
+              Compute serverless em workspaces trial tem cota agregada baixa — não é sobre o
+              tamanho de cada job, é sobre quantos jobs disputam compute <em>ao mesmo tempo</em>.
+              Neste projeto, mesmo com 7 jobs "leves" (a maioria só spark_python_task simples),
+              rodar todos como <code>continuous</code> (24/7) simultaneamente estourava a cota —
+              cada continuous job segura compute o tempo todo, mesmo sem dado novo pra processar.
+              A saída não foi pedir mais cota (fora de escopo num workspace trial): foi
+              converter os jobs de <code>continuous</code> pra <code>schedule</code> com
+              <code>availableNow=True</code>, trocando "sempre ligado" por "liga, processa tudo
+              que acumulou, desliga" — mesmo throughput eventual, fração do compute residente.
+            </p>
+          </div>
+        </article>
+      </section>
+
+      <section class="topic" id="medallion">
+        <div class="topic-head">
+          <h2>Arquitetura Medallion &amp; Qualidade de Dados</h2>
+          <span class="topic-tag">bronze/silver/gold, DQ, SCD2</span>
+        </div>
+        <p class="topic-intro">
+          Um framework de DQ existe pra registrar, não pra bloquear — a decisão de "o que
+          falha o pipeline vs o que só fica registrado pra auditoria" é a parte que
+          diferencia design maduro de design ingênuo.
+        </p>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>O que cada camada Bronze/Silver/Gold garante — e o que ela explicitamente não garante?</h3>
+            <span class="level" data-level="basico">Básico</span>
+          </div>
+          <div class="answer">
+            <p>
+              Bronze é o dado bruto, validado só estruturalmente (schema parseável, chaves
+              obrigatórias presentes) — defeito de negócio (data ausente, valor inválido) passa
+              de propósito. Silver dedup e aplica checks de qualidade de verdade
+              (<code>not_null</code>, <code>unique</code>). Gold é o dado pronto pra consumo,
+              com regra de negócio aplicada (score de fraude, conformidade SUSEP). Nenhuma
+              camada garante "dado perfeito" — cada uma garante um contrato específico, e
+              misturar as responsabilidades é o erro de design mais comum nesse padrão.
+            </p>
+          </div>
+        </article>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>O que é quarentena/dead-letter e por que ela evita que 1 registro derrube o pipeline inteiro?</h3>
+            <span class="level" data-level="basico">Básico</span>
+          </div>
+          <div class="answer">
+            <p>
+              Em vez de falhar o batch inteiro quando um registro não bate o schema esperado
+              (<code>_is_malformed</code>), esse registro é isolado numa tabela separada
+              (<code>bronze.&lt;tabela&gt;_quarantine</code>), e o resto do batch segue
+              normalmente. Essa tabela só é criada no primeiro evento malformado — um tópico
+              saudável, sem nenhum registro quarentenado, nunca cria essa tabela, o que
+              teve implicação direta num bug real de UI (ver Casos reais, adiante).
+            </p>
+          </div>
+        </article>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>Quando faz sentido construir um framework de DQ próprio em vez de usar Great Expectations/dbt tests?</h3>
+            <span class="level" data-level="intermediario">Intermediário</span>
+          </div>
+          <div class="answer">
+            <p>
+              Ferramentas como Great Expectations trazem uma biblioteca rica de expectations e
+              relatórios prontos, com custo de integração e overhead de dependência. Um
+              framework custom em PySpark puro (<code>check_not_null</code>,
+              <code>check_unique</code>, <code>check_range</code>, <code>check_allowed_values</code>,
+              <code>check_freshness</code>) faz sentido quando o conjunto de checks é pequeno e
+              estável, e a decisão de arquitetura já é "100% Spark, sem framework externo" — é
+              uma troca de flexibilidade/maturidade por simplicidade e controle total do
+              comportamento.
+            </p>
+          </div>
+        </article>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>SCD Tipo 2 — por que <code>is_current</code>/<code>valid_from</code>/<code>valid_to</code> é o padrão certo pra consentimento?</h3>
+            <span class="level" data-level="senior">Sênior</span>
+          </div>
+          <div class="answer">
+            <p>
+              Consentimento (Open Insurance) precisa responder "quando isso mudou", não só "qual
+              é o estado atual" — é dado de auditoria por natureza. SCD2 fecha a versão vigente
+              antiga (<code>is_current=false</code>, <code>valid_to</code> preenchido) e abre uma
+              nova, preservando o histórico completo. A implementação aqui trata eventos fora de
+              ordem explicitamente: um evento mais antigo que a versão já vigente não fecha nem
+              substitui nada — sem essa checagem, um evento atrasado da rede poderia reabrir uma
+              versão que já deveria estar fechada.
+            </p>
+          </div>
+        </article>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>Reconciliação entre fontes discordantes — por que mediana como resolução de conflito?</h3>
+            <span class="level" data-level="staff">Staff</span>
+          </div>
+          <div class="answer">
+            <p>
+              Quando 3 fontes fictícias reportam o mesmo sinistro com valores diferentes, a
+              mediana é robusta a uma única fonte discrepante, determinística e não introduz
+              viés de "escolher uma seguradora como fonte de verdade" — média seria puxada por
+              outlier, e "primeira fonte que chegou" seria arbitrário e não reprodutível. É uma
+              decisão de MVP documentada como tal, não uma alegação de que é o que um processo
+              regulatório real faria — saber a diferença entre "decisão pragmática documentada"
+              e "solução definitiva" é exatamente o tipo de nuance que sinaliza senioridade numa
+              entrevista.
+            </p>
+          </div>
+        </article>
+      </section>
+
+      <section class="topic" id="mlops">
+        <div class="topic-head">
+          <h2>MLOps &amp; Shadow Scoring</h2>
+          <span class="topic-tag">champion/challenger, drift, retrain</span>
+        </div>
+        <p class="topic-intro">
+          O modelo de fraude nunca decide sozinho neste projeto — e essa restrição não é
+          timidez, é a resposta certa pra um rótulo de treino que vaza da própria heurística.
+        </p>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>O que é "shadow mode" e por que ele existe antes de um cutover?</h3>
+            <span class="level" data-level="basico">Básico</span>
+          </div>
+          <div class="answer">
+            <p>
+              Shadow mode roda um modelo novo em paralelo ao decisor real, só pra observação —
+              <code>model_fraud_score</code> é escrito em <code>gold.claims</code>, mas
+              <code>fraud_flag</code>/<code>auto_approved</code> continuam decidindo 100% pela
+              heurística de <code>streaming_score.py</code>. É a forma segura de comparar
+              "modelo novo vs decisor atual" com dado de produção real, sem risco de uma decisão
+              ruim chegar ao usuário final antes de confiança suficiente.
+            </p>
+          </div>
+        </article>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>Por que treinar sobre rótulo derivado da própria heurística é vazamento de rótulo?</h3>
+            <span class="level" data-level="intermediario">Intermediário</span>
+          </div>
+          <div class="answer">
+            <p>
+              Se o rótulo de treino é literalmente a saída da heurística que já decide
+              <code>fraud_flag</code>, o modelo aprende a reproduzir a heurística, não a superar
+              ela — daí o <code>f1=1.0</code> suspeito. Um F1 perfeito em produção quase sempre é
+              sinal de vazamento, não de modelo excelente. É exatamente esse motivo,
+              documentado explicitamente no código, que justifica manter o modelo em shadow mode
+              em vez de promovê-lo a decisor: promover agora seria trocar uma heurística por uma
+              cópia estatística da mesma heurística.
+            </p>
+          </div>
+        </article>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>Como funciona a detecção de drift, e por que "nunca falha o pipeline sozinho" é intencional?</h3>
+            <span class="level" data-level="intermediario">Intermediário</span>
+          </div>
+          <div class="answer">
+            <p>
+              <code>model_drift.py</code> compara <code>baseline_mean</code> vs
+              <code>current_mean</code> por feature (<code>drift_ratio</code>), rodando a cada
+              6h. Drift é sinal de "investigar e talvez retreinar", não uma condição binária de
+              falha — um pipeline que trava sozinho a cada drift detectado geraria alarme falso
+              demais pra ser operável. O pior status real que o app mostra pra drift é "atenção"
+              (amarelo), nunca "vermelho" — decisão consciente de UX de observabilidade, não
+              limitação técnica.
+            </p>
+          </div>
+        </article>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>Por que retrain condicional é mais maduro que "retreinar sempre a cada 6h"?</h3>
+            <span class="level" data-level="senior">Sênior</span>
+          </div>
+          <div class="answer">
+            <p>
+              <code>train_model.py</code> só treina de fato se: é a 1ª execução (baseline ainda
+              não existe), a última checagem de drift sinalizou algo, ou <code>--force</code> foi
+              passado explicitamente. Retreinar sem necessidade queima compute (custo real) e
+              introduz variância desnecessária no modelo em produção — cada novo champion é uma
+              mudança de comportamento que precisa de razão pra existir, não um cron sem
+              critério.
+            </p>
+          </div>
+        </article>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>Por que um champion novo só é pego no próximo restart de um job contínuo — e o que isso implica?</h3>
+            <span class="level" data-level="staff">Staff</span>
+          </div>
+          <div class="answer">
+            <p>
+              <code>load_champion_model_udf</code> carrega o modelo via
+              <code>mlflow.pyfunc.spark_udf</code> uma vez por <em>run</em> do job, não por
+              micro-batch. Enquanto <code>fraud_score_stream</code> era continuous, um champion
+              novo promovido a cada ciclo de treino só entrava em vigor no próximo restart do
+              job — que podia demorar dias sem acontecer sozinho. A conversão pra
+              <code>schedule</code> (a cada 5 min) resolveu isso de graça: cada execução agendada
+              já é um "restart" natural, então o lag entre "novo champion promovido" e "novo
+              champion em produção" caiu de indefinido pra no máximo 5 minutos — um efeito
+              colateral positivo de uma decisão que foi tomada por outro motivo (cota de
+              compute).
+            </p>
+          </div>
+        </article>
+      </section>
+
+      <section class="topic" id="finops">
+        <div class="topic-head">
+          <h2>FinOps</h2>
+          <span class="topic-tag">DBU, cota, custo vs latência</span>
+        </div>
+        <p class="topic-intro">
+          "Lento" e "caro" no streaming quase sempre têm a mesma causa raiz: compute alocado
+          o tempo todo, competindo por uma cota que não cresce com o número de jobs.
+        </p>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>O que é DBU e por que compute é cobrado mesmo sem processar dado novo?</h3>
+            <span class="level" data-level="basico">Básico</span>
+          </div>
+          <div class="answer">
+            <p>
+              DBU (Databricks Unit) mede consumo de compute, não volume de dado processado. Um
+              job <code>continuous</code> mantém um cluster/compute serverless alocado 24/7
+              esperando o próximo micro-batch — isso é cobrado independente de ter chegado 1
+              evento ou 1 milhão naquela janela. É o motivo raiz pelo qual "sempre ligado" e
+              "caro" andam juntos em streaming mal dimensionado.
+            </p>
+          </div>
+        </article>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>Continuous vs schedule: por que "sempre ligado" nem sempre significa "mais rápido"?</h3>
+            <span class="level" data-level="intermediario">Intermediário</span>
+          </div>
+          <div class="answer">
+            <p>
+              Quando vários jobs <code>continuous</code> disputam a mesma cota apertada, cada um
+              recebe uma fatia menor e mais instável de compute — na prática, mais lento que um
+              job <code>schedule</code> que ganha uma janela de compute <em>dedicada</em> a cada
+              execução. Foi exatamente esse padrão que já apareceu 2 vezes neste projeto
+              (<code>fraud_score_stream</code> primeiro, depois <code>bronze_ingest</code>/
+              <code>silver_transform</code>/<code>regulatory_bronze_ingest</code>): continuous
+              parecia "mais real-time" no papel, mas na prática processava menos por estar
+              competindo o tempo todo.
+            </p>
+          </div>
+        </article>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>Quando reaproveitar um warehouse serverless pré-provisionado em vez de criar um novo?</h3>
+            <span class="level" data-level="intermediario">Intermediário</span>
+          </div>
+          <div class="answer">
+            <p>
+              Contas trial geralmente não permitem provisionar um segundo endpoint serverless
+              via API (confirmado neste projeto: um <code>databricks_sql_endpoint</code> novo
+              ficou preso em "Still creating..." por 15+ minutos, apply cancelado). Reaproveitar
+              o warehouse serverless já existente ("Serverless Starter Warehouse") via
+              <code>output</code> do Terraform, em vez de tentar criar um novo, evita esse
+              problema inteiro e ainda é mais barato — um endpoint a menos consumindo cota.
+            </p>
+          </div>
+        </article>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>Como diagnosticar "pipeline lento" como contenção de cota, e não Kafka/Spark lentos?</h3>
+            <span class="level" data-level="senior">Sênior</span>
+          </div>
+          <div class="answer">
+            <p>
+              O padrão de evidência que fechou esse diagnóstico aqui: (1) o producer
+              (GitHub Actions) tinha rodado com sucesso minutos antes — ou seja, havia dado novo
+              chegando no Kafka; (2) Bronze/Silver não avançavam havia horas, mesmo assim; (3)
+              Gold parecia "fresco" só porque um job <em>schedule</em> separado
+              (<code>fraud_score_stream</code>) continuava processando um <strong>backlog
+              acumulado</strong> em Silver, não dado novo. Sinistros fora do SLA e discrepâncias
+              de reconciliação no mesmo momento reforçaram "backlog", não "pico pontual". Nenhuma
+              métrica isolada prova contenção de cota — é o cruzamento de sinais que prova.
+            </p>
+          </div>
+        </article>
+
+        <article class="qa">
+          <div class="qa-head">
+            <h3>Cadência escalonada entre jobs como ferramenta de FinOps — como isso funciona na prática?</h3>
+            <span class="level" data-level="staff">Staff</span>
+          </div>
+          <div class="answer">
+            <p>
+              Depois de converter 3 jobs de <code>continuous</code> pra <code>schedule</code>,
+              todos rodando exatamente no mesmo minuto recriaria o mesmo pico de contenção só que
+              periódico em vez de constante. A correção foi escalonar offsets:
+              <code>bronze_ingest</code> a cada 5min (<code>0 */5 * * * ?</code>),
+              <code>silver_transform</code> a cada 5min com +2min de offset
+              (<code>0 2-59/5 * * * ?</code>, dando tempo do Bronze escrever antes da Silver ler),
+              <code>regulatory_bronze_ingest</code> a cada 10min com +4min de offset. Nenhum
+              aumento de compute — só redistribuição no tempo. É o tipo de otimização que não
+              aparece em nenhum dashboard de custo, só na ausência de um problema que deixou de
+              acontecer.
+            </p>
+          </div>
+        </article>
+      </section>
+
+      <section class="topic" id="warstories">
+        <div class="topic-head">
+          <h2>Casos reais de produção</h2>
+          <span class="topic-tag">o que só quem operou isso sabe contar</span>
+        </div>
+        <p class="topic-intro">
+          Cinco histórias curtas, prontas pra responder "me conta de um bug difícil que você
+          já resolveu" sem soar genérico.
+        </p>
+
+        <article class="story">
+          <p class="story-title">
+            <code>None</code> virando <code>NaN</code> silenciosamente na serialização JSON
+            <span class="story-file">regulatory_feeds.py / kafka_publisher.py</span>
+          </p>
+          <div class="answer">
+            <p>
+              Um producer fictício usava <code>None</code> pra simular campo ausente. Como a
+              lista de dicts virava uma coluna pandas mista de números e <code>None</code>,
+              <code>pd.DataFrame(rows)</code> coagia a coluna inteira pra <code>float64</code>,
+              convertendo <code>None</code> em <code>NaN</code> — e <code>json.dumps</code> de um
+              <code>float('nan')</code> produz o token JSON inválido <code>NaN</code> (não
+              <code>null</code>), que quebrava o cast do lado Spark com
+              <code>CAST_INVALID_INPUT</code>. Corrigido na origem: sanitizar qualquer
+              <code>float</code> NaN pra <code>None</code> logo antes de serializar, cobrindo
+              qualquer fonte futura que caia na mesma armadilha do pandas.
+            </p>
+          </div>
+        </article>
+
+        <article class="story">
+          <p class="story-title">
+            SLA de latência estruturalmente inatingível numa cota compartilhada
+            <span class="story-file">measure_pipeline_latency.py</span>
+          </p>
+          <div class="answer">
+            <p>
+              O alvo original do DEFINE era score de fraude visível em &lt; 1 min. Com
+              <code>fraud_score_stream</code> virando <code>schedule</code> a cada 5 min (por
+              contenção de cota), esse SLA reprovava sempre, estruturalmente — mesmo com o
+              pipeline saudável. Recalibrado pra 420s (7 min), cobrindo o pior caso realista de
+              um claim que chega logo após um ciclo começar. A lição: a métrica certa é a que o
+              sistema pode honrar de verdade, não a que o documento original pediu antes da
+              restrição de infraestrutura existir.
+            </p>
+          </div>
+        </article>
+
+        <article class="story">
+          <p class="story-title">
+            Consumer lag "sempre vazio" não é ausência de problema
+            <span class="story-file">confluent_metrics.py / kafka_lag_reporter.py</span>
+          </p>
+          <div class="answer">
+            <p>
+              Spark Structured Streaming não participa de consumer group nativo (ver seção
+              Kafka) — sem o workaround deliberado de commit administrativo via KIP-496, a
+              Confluent Metrics API mostra "nenhum consumer group ativo" mesmo com o pipeline
+              100% saudável. Um candidato júnior lê isso como "sem problema". Um sênior sabe
+              perguntar "esse zero é real, ou é a ferramenta de observabilidade que não enxerga
+              esse tipo de consumidor?" antes de tirar qualquer conclusão.
+            </p>
+          </div>
+        </article>
+
+        <article class="story">
+          <p class="story-title">
+            "Gold parece fresco" pode significar "processando backlog", não "pipeline saudável"
+            <span class="story-file">status.py / fraud_score_stream</span>
+          </p>
+          <div class="answer">
+            <p>
+              <code>_scored_at</code> em <code>gold.claims</code> reflete quando o job
+              <em>escreveu</em> a linha, não a idade do evento original. Um job
+              <code>schedule</code> saudável continua avançando <code>_scored_at</code> mesmo
+              processando dado antigo acumulado, enquanto a ingestão real (Bronze/Silver) está
+              parada há horas. Cruzar com sinistros fora do SLA e discrepâncias de reconciliação
+              no mesmo momento foi o que revelou "backlog", não "tudo bem" — uma métrica de
+              freshness sozinha, sem contexto de volume/backlog, mente por omissão.
+            </p>
+          </div>
+        </article>
+
+        <article class="story">
+          <p class="story-title">
+            Uma API externa tem contrato próprio, e "SQL genérico" não se aplica a ela
+            <span class="story-file">confluent_metrics.py</span>
+          </p>
+          <div class="answer">
+            <p>
+              A Confluent Metrics API rejeita qualquer agregação além de <code>SUM</code>/nulo
+              pra essas métricas — usar <code>MAX</code> devolvia 400 Bad Request. Como a
+              granularidade já era <code>PT1M</code> (o menor bucket suportado), <code>SUM</code>
+              não soma múltiplos pontos de verdade nesse caso — é, na prática, o único valor
+              reportado naquele minuto, não uma agregação com perda de informação. A lição:
+              tratar o corpo da resposta de erro como fonte de verdade (a mensagem padrão de
+              <code>requests</code> não inclui o corpo, onde a Confluent de fato explica o
+              motivo) evita ter que redescobrir isso do zero na próxima vez que a API rejeitar
+              algo.
+            </p>
+          </div>
+        </article>
+      </section>
+
+    </main>
+  </div>
+
+  <footer class="end">
+    Baseado no Insurance Data Platform (Kafka/Confluent Cloud → Databricks/Spark Structured
+    Streaming → Delta Lake, Unity Catalog, DABs). Toda referência de código, número de SLA e
+    incidente aqui é real do projeto, não ilustrativo.
+  </footer>
+</div>
+</body>
+</html>
