@@ -1,7 +1,7 @@
 import logging
 
-from confluent_kafka import TopicPartition
-from confluent_kafka.admin import AdminClient, ConsumerGroupTopicPartitions
+from confluent_kafka import ConsumerGroupTopicPartitions, TopicPartition
+from confluent_kafka.admin import AdminClient
 
 from src.common.kafka_config import get_admin_client_config
 
