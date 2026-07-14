@@ -39,31 +39,63 @@ def _status_label(within_sla: bool | None) -> str:
     return "✔ dentro do SLA" if within_sla else "✖ fora do SLA"
 
 
+def _has_sample(metric_name: str, details: dict) -> bool:
+    if metric_name == "at_003_throughput":
+        return bool(details.get("minutes_observed"))
+    return bool(details.get("sample_size"))
+
+
+st.caption(f"Última checagem do job: {rows[0]['_checked_at']}")
+
+# Cada checagem roda sobre uma janela de só 15 min (--window-minutes) — sem
+# tráfego passando bem naquele instante, a checagem mais recente fica vazia
+# mesmo que o pipeline esteja saudável. Por isso separamos "checagem mais
+# recente" (pra status/SLA) de "última checagem com amostras de verdade" (pra
+# mostrar um número em vez de só "sem dados").
 latest_by_metric: dict[str, dict] = {}
+last_data_by_metric: dict[str, dict] = {}
+samples_seen: dict[str, int] = {name: 0 for name in METRIC_LABELS}
+checks_seen: dict[str, int] = {name: 0 for name in METRIC_LABELS}
+
 for row in rows:
-    if row["metric_name"] not in latest_by_metric:
-        latest_by_metric[row["metric_name"]] = row
+    metric_name = row["metric_name"]
+    if metric_name not in METRIC_LABELS:
+        continue
+    details = json.loads(row["details_json"])
+    checks_seen[metric_name] += 1
+    if metric_name not in latest_by_metric:
+        latest_by_metric[metric_name] = row
+    if _has_sample(metric_name, details):
+        samples_seen[metric_name] += 1
+        if metric_name not in last_data_by_metric:
+            last_data_by_metric[metric_name] = row
 
 cols = st.columns(len(latest_by_metric))
 for col, (metric_name, row) in zip(cols, latest_by_metric.items(), strict=False):
-    details = json.loads(row["details_json"])
     label = METRIC_LABELS.get(metric_name, metric_name)
+    data_row = last_data_by_metric.get(metric_name)
+    data_details = json.loads(data_row["details_json"]) if data_row else None
 
-    if metric_name == "at_003_throughput":
+    if data_details is None:
+        value = "sem dados"
+    elif metric_name == "at_003_throughput":
         # Sem latência única de resumo — o número mais informativo é quantos
         # minutos, dos observados, ficaram abaixo de 80% do volume esperado.
-        below = details.get("minutes_below_80pct_expected")
-        observed = details.get("minutes_observed")
-        value = f"{below}/{observed} min abaixo do esperado" if observed else "sem dados"
-    elif details.get("sample_size", 0) == 0:
-        value = "sem dados"
+        below = data_details.get("minutes_below_80pct_expected")
+        observed = data_details.get("minutes_observed")
+        value = f"{below}/{observed} min abaixo do esperado"
     else:
-        avg_seconds = details.get("avg_seconds")
-        max_seconds = details.get("max_seconds")
-        sla_seconds = details.get("sla_seconds")
+        avg_seconds = data_details.get("avg_seconds")
+        max_seconds = data_details.get("max_seconds")
+        sla_seconds = data_details.get("sla_seconds")
         value = f"méd {avg_seconds:.0f}s / máx {max_seconds:.0f}s (SLA {sla_seconds}s)"
 
     col.metric(label, value, delta=_status_label(row["within_sla"]), delta_color="off")
+    col.caption(f"{samples_seen[metric_name]}/{checks_seen[metric_name]} checagens (200 mais recentes) com amostras")
+    if data_row is not None and data_row is not row:
+        col.caption(f"última janela com dados: {data_row['_checked_at']}")
+    elif data_row is None:
+        col.caption("nenhuma amostra nas últimas 200 checagens")
 
 st.divider()
 st.subheader("Tendência (200 checagens mais recentes)")

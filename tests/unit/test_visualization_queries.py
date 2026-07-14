@@ -8,7 +8,9 @@ from queries import (
     build_cost_usage_by_product_query,
     build_dq_results_query,
     build_dq_summary_query,
+    build_fraud_model_divergence_query,
     build_fraud_probability_query,
+    build_fraud_probability_summary_query,
     build_model_drift_query,
     build_pipeline_latency_query,
     build_reconciliation_query,
@@ -61,6 +63,22 @@ def test_build_sla_breach_query():
 
     assert "auto_approved" in query.sql
     assert query.params == {"sla_hours": 48, "row_limit": 5}
+
+
+def test_build_fraud_probability_summary_query():
+    query = build_fraud_probability_summary_query()
+
+    assert "gold.claims" in query.sql
+    assert "model_scored" in query.sql
+    assert query.params == {}
+
+
+def test_build_fraud_model_divergence_query_default_limit():
+    query = build_fraud_model_divergence_query()
+
+    assert "gold.claims" in query.sql
+    assert "score_diff" in query.sql
+    assert query.params == {"row_limit": 50}
 
 
 def test_build_dq_summary_query_default_limit():

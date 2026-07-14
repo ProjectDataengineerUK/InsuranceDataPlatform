@@ -77,6 +77,40 @@ def build_sla_breach_query(sla_hours: int = 24, row_limit: int = 100) -> SqlQuer
     )
 
 
+def build_fraud_probability_summary_query() -> SqlQuery:
+    # Visão agregada de gold.claims — contexto (quantos sinistros, quantos
+    # sinalizados, cobertura do modelo shadow) antes da lista linha a linha de
+    # build_fraud_probability_query.
+    return SqlQuery(
+        sql=(
+            "SELECT COUNT(*) AS total_claims, "
+            "SUM(CASE WHEN fraud_flag THEN 1 ELSE 0 END) AS flagged_fraud, "
+            "SUM(CASE WHEN auto_approved THEN 1 ELSE 0 END) AS auto_approved, "
+            "SUM(CASE WHEN model_fraud_score IS NOT NULL THEN 1 ELSE 0 END) AS model_scored, "
+            "AVG(fraud_score) AS avg_fraud_score, "
+            "AVG(model_fraud_score) AS avg_model_fraud_score "
+            "FROM gold.claims"
+        ),
+        params={},
+    )
+
+
+def build_fraud_model_divergence_query(row_limit: int = 50) -> SqlQuery:
+    # fraud_score decide, model_fraud_score é só shadow (ver docs/ARCHITECTURE.md,
+    # "Shadow scoring do modelo campeão") — o valor do shadow mode está em ver
+    # onde os dois mais discordam, antes de uma eventual troca de decisão.
+    return SqlQuery(
+        sql=(
+            "SELECT claim_id, policy_id, region, amount, fraud_score, fraud_flag, "
+            "model_fraud_score, auto_approved, event_timestamp, "
+            "ABS(fraud_score - model_fraud_score) AS score_diff "
+            "FROM gold.claims WHERE model_fraud_score IS NOT NULL "
+            "ORDER BY score_diff DESC LIMIT :row_limit"
+        ),
+        params={"row_limit": row_limit},
+    )
+
+
 def build_dq_summary_query(row_limit: int = 50) -> SqlQuery:
     return SqlQuery(
         sql="SELECT * FROM gold.regulatory_dq_summary ORDER BY _generated_at DESC LIMIT :row_limit",
