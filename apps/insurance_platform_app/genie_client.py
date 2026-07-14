@@ -9,6 +9,15 @@ def is_configured() -> bool:
     return bool(os.environ.get("GENIE_SPACE_ID"))
 
 
+def _message_id(message: "GenieMessage") -> str | None:
+    # message_id é o campo canônico, mas versões mais antigas do
+    # databricks-sdk instalado neste workspace não têm esse atributo no
+    # dataclass (AttributeError confirmado em produção) — .id é o
+    # identificador "legado" que a própria SDK documenta como equivalente,
+    # ainda presente nessas versões.
+    return getattr(message, "message_id", None) or getattr(message, "id", None)
+
+
 def _extract_answer(message: "GenieMessage") -> dict:
     # Um GenieMessage pode ter vários attachments (texto + SQL + follow-up
     # questions no mesmo turno) — concatena todo texto e guarda só o último
@@ -59,9 +68,10 @@ def ask_genie(content: str, conversation_id: str | None = None) -> dict:
     else:
         message = w.genie.start_conversation_and_wait(space_id=space_id, content=content)
 
+    message_id = _message_id(message)
     result: dict = {
         "conversation_id": message.conversation_id,
-        "message_id": message.message_id,
+        "message_id": message_id,
         "error": message.error.error if message.error else None,
         "rows": None,
         "columns": None,
@@ -73,7 +83,7 @@ def ask_genie(content: str, conversation_id: str | None = None) -> dict:
             query_result = w.genie.get_message_attachment_query_result(
                 space_id=space_id,
                 conversation_id=message.conversation_id,
-                message_id=message.message_id,
+                message_id=message_id,
                 attachment_id=result["query_attachment_id"],
             )
             statement = query_result.statement_response

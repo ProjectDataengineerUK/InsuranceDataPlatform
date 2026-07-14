@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "apps" / "insurance_platform_app"))
 
-from genie_client import _extract_answer, is_configured  # noqa: E402
+from genie_client import _extract_answer, _message_id, is_configured  # noqa: E402
 
 
 class _FakeText:
@@ -75,3 +75,29 @@ def test_extract_answer_no_attachments():
         "sql_description": None,
         "query_attachment_id": None,
     }
+
+
+class _MessageWithoutMessageId:
+    # Simula a versão do databricks-sdk instalada em produção, onde
+    # GenieMessage não tem o atributo message_id ainda (AttributeError
+    # confirmado em produção) — só o campo legado "id".
+    def __init__(self, legacy_id):
+        self.id = legacy_id
+
+
+class _MessageWithMessageId:
+    def __init__(self, message_id, legacy_id):
+        self.message_id = message_id
+        self.id = legacy_id
+
+
+def test_message_id_falls_back_to_legacy_id_field():
+    assert _message_id(_MessageWithoutMessageId("legacy-123")) == "legacy-123"
+
+
+def test_message_id_prefers_canonical_field_when_present():
+    assert _message_id(_MessageWithMessageId("new-456", "legacy-456")) == "new-456"
+
+
+def test_message_id_returns_none_when_neither_field_exists():
+    assert _message_id(object()) is None
